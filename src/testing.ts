@@ -6,11 +6,10 @@
  * import { resetDocfyRegistry } from 'nestjs-docfy/testing';
  * beforeEach(() => resetDocfyRegistry());
  */
-export { DocfyRegistry } from './registry';
+import { DocfyRegistry } from './registry';
+
+export { DocfyRegistry };
 
 export function resetDocfyRegistry(): void {
-  // Imported lazily to avoid pulling the registry into production bundles
-  // when the testing module is tree-shaken.
-  const { DocfyRegistry: reg } = require('./registry') as { DocfyRegistry: typeof import('./registry').DocfyRegistry };
-  reg._reset();
+  DocfyRegistry._reset();
 }

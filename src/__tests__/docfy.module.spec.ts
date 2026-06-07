@@ -6,14 +6,8 @@ function makeCache(filename: string, target: Function) {
   return () => ({ [filename]: { exports: { [target.name]: target } } });
 }
 
-function missingFileError(docsPath: string) {
-  return Object.assign(new Error(`Cannot find module '${docsPath}'`), {
-    code: 'MODULE_NOT_FOUND',
-  });
-}
-
-function missingDependencyError(depPath: string) {
-  return Object.assign(new Error(`Cannot find module '${depPath}'`), {
+function moduleNotFoundError(modulePath: string) {
+  return Object.assign(new Error(`Cannot find module '${modulePath}'`), {
     code: 'MODULE_NOT_FOUND',
   });
 }
@@ -77,7 +71,7 @@ describe('DocfyModule._loadAllDocs()', () => {
       const cache = makeCache('/app/no.controller.js', NoDocsController);
       const docsPath = '/app/no.controller.docs.js';
 
-      mockRequire.mockImplementation(() => { throw missingFileError(docsPath); });
+      mockRequire.mockImplementation(() => { throw moduleNotFoundError(docsPath); });
 
       expect(() => DocfyModule._loadAllDocs({}, mockRequire, cache)).not.toThrow();
     });
@@ -88,7 +82,7 @@ describe('DocfyModule._loadAllDocs()', () => {
       const cache = makeCache('/app/strict.controller.js', StrictNoDocsController);
       const docsPath = '/app/strict.controller.docs.js';
 
-      mockRequire.mockImplementation(() => { throw missingFileError(docsPath); });
+      mockRequire.mockImplementation(() => { throw moduleNotFoundError(docsPath); });
 
       expect(() =>
         DocfyModule._loadAllDocs({ strict: true }, mockRequire, cache),
@@ -102,7 +96,7 @@ describe('DocfyModule._loadAllDocs()', () => {
 
       // The missing module is a dependency, not the docs file itself
       mockRequire.mockImplementation(() => {
-        throw missingDependencyError('/app/some-missing-dep');
+        throw moduleNotFoundError('/app/some-missing-dep');
       });
 
       expect(() =>

@@ -1,6 +1,15 @@
 import { SetMetadata } from '@nestjs/common';
 import { DocfyRegistry } from './registry';
 
+/**
+ * Metadata key set on every class decorated with @WithDocs().
+ * The lib itself uses the global DocfyRegistry (not this metadata) for discovery.
+ * Exposed for external introspection — e.g. guards, interceptors, or tooling
+ * that need to check whether a controller has a companion docs file:
+ *
+ * @example
+ * const hasDocs = Reflect.getMetadata(DOCFY_MARKER, MyController) === true;
+ */
 export const DOCFY_MARKER = 'docfy:with_docs';
 
 /**

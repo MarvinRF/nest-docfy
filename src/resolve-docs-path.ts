@@ -1,6 +1,6 @@
 import * as path from 'path';
 
-type CacheSnapshot = Record<string, { exports: Record<string, unknown>; filename?: string } | undefined>;
+type CacheSnapshot = Record<string, { exports: Record<string, unknown> } | undefined>;
 
 /**
  * Given a controller class, finds its own source file in require.cache and derives
