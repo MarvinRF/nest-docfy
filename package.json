@@ -36,7 +36,15 @@
     "documentation",
     "companion"
   ],
-  "author": "",
+  "author": "Marvin Rocha",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/MarvinRF/nest-docfy.git"
+  },
+  "homepage": "https://github.com/MarvinRF/nest-docfy#readme",
+  "bugs": {
+    "url": "https://github.com/MarvinRF/nest-docfy/issues"
+  },
   "license": "MIT",
   "peerDependencies": {
     "@nestjs/common": ">=9.0.0",
