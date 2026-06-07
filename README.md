@@ -2,16 +2,73 @@
 
 Keep your NestJS controllers clean. Swagger documentation lives in a dedicated companion file — by naming convention, zero boilerplate.
 
+## Before / After
+
+**Before** — Swagger decorators buried in your controller:
+
 ```ts
-// users.controller.ts — no Swagger decorators at all
-@WithDocs()
+// users.controller.ts
+@ApiTags('users')
 @Controller('users')
 export class UsersController {
   @Get()
-  findAll(): Promise<UserEntity[]> { ... }
+  @ApiOperation({ summary: 'List all users' })
+  @ApiResponse({ status: 200, type: [UserEntity] })
+  findAll(): Promise<UserEntity[]> {
+    return this.usersService.findAll();
+  }
+
+  @Get(':id')
+  @ApiOperation({ summary: 'Get a user by ID' })
+  @ApiParam({ name: 'id', description: 'User UUID' })
+  @ApiResponse({ status: 200, type: UserEntity })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  findOne(@Param('id') id: string): Promise<UserEntity> {
+    return this.usersService.findOne(id);
+  }
 
   @Post()
-  create(@Body() dto: CreateUserDto): Promise<UserEntity> { ... }
+  @ApiOperation({ summary: 'Create a user' })
+  @ApiBody({ type: CreateUserDto })
+  @ApiResponse({ status: 201, type: UserEntity })
+  @ApiResponse({ status: 400, description: 'Invalid input' })
+  create(@Body() dto: CreateUserDto): Promise<UserEntity> {
+    return this.usersService.create(dto);
+  }
+
+  @Delete(':id')
+  @ApiOperation({ summary: 'Delete a user' })
+  @ApiParam({ name: 'id', description: 'User UUID' })
+  @ApiResponse({ status: 204 })
+  @ApiResponse({ status: 404, description: 'User not found' })
+  remove(@Param('id') id: string): Promise<void> {
+    return this.usersService.remove(id);
+  }
+}
+```
+
+**After** — controller expresses only behavior:
+
+```ts
+// users.controller.ts
+@WithDocs()
+@Controller('users')
+export class UsersController {
+  findAll(): Promise<UserEntity[]> {
+    return this.usersService.findAll();
+  }
+
+  findOne(@Param('id') id: string): Promise<UserEntity> {
+    return this.usersService.findOne(id);
+  }
+
+  create(@Body() dto: CreateUserDto): Promise<UserEntity> {
+    return this.usersService.create(dto);
+  }
+
+  remove(@Param('id') id: string): Promise<void> {
+    return this.usersService.remove(id);
+  }
 }
 ```
 
