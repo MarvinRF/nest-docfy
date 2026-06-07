@@ -34,7 +34,22 @@
     "openapi",
     "decorator",
     "documentation",
-    "companion"
+    "companion",
+    "nestjs-swagger",
+    "nestjs-openapi",
+    "nestjs-module",
+    "nestjs-decorator",
+    "nestjs-clean",
+    "swagger-decorator",
+    "swagger-companion",
+    "openapi-decorator",
+    "controller-docs",
+    "clean-controller",
+    "separation-of-concerns",
+    "developer-experience",
+    "dx",
+    "typescript",
+    "reflect-metadata"
   ],
   "author": "Marvin Rocha",
   "repository": {

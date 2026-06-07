@@ -1,0 +1,101 @@
+# nestjs-docfy
+
+> A NestJS module that separates Swagger/OpenAPI documentation from controller logic using a companion file convention. Controllers stay clean; all `@nestjs/swagger` decorators live in a dedicated `*.controller.docs.ts` file discovered automatically at startup.
+
+## What it solves
+
+NestJS controllers decorated with `@nestjs/swagger` decorators (`@ApiOperation`, `@ApiResponse`, `@ApiTags`, `@ApiBody`, etc.) become cluttered. A controller with 5 routes can easily accumulate 30+ Swagger decorator lines, burying the actual routing and business logic.
+
+`nestjs-docfy` moves all Swagger decorators into a companion file by naming convention — the same pattern NestJS already uses for spec files (`users.controller.spec.ts`). No path configuration. No manual registration. Discovery is automatic.
+
+## How it works
+
+1. Mark a controller with `@WithDocs()` — this registers it in `DocfyRegistry` at decoration time.
+2. Add `DocfyModule.forRoot()` to your root `AppModule`.
+3. `forRoot()` runs synchronously during the NestJS module graph construction phase, before `SwaggerModule.createDocument()` is called. It searches `require.cache` to locate the source file of each registered controller, derives the companion path by convention (`.controller.ts` → `.controller.docs.ts`), and `require()`s it synchronously.
+4. The companion file calls `docs(ControllerClass, config)`, which applies `Reflect.defineMetadata` to the controller's prototype methods — exactly as TypeScript decorator syntax would.
+5. By the time `SwaggerModule.createDocument()` scans for metadata, all documentation metadata is already applied.
+
+## Key timing insight
+
+`onModuleInit` and lifecycle hooks fire **after** `SwaggerModule.createDocument()` is called in `main.ts`. Any approach based on `onModuleInit` will produce empty Swagger docs. `nestjs-docfy` avoids this by using synchronous `require()` inside `forRoot()`, which executes during `NestFactory.create()` — before any lifecycle hooks or `SwaggerModule` calls.
+
+## Installation
+
+```bash
+npm install nestjs-docfy
+```
+
+Peer dependencies: `@nestjs/common >=9`, `@nestjs/swagger >=6`, `reflect-metadata`.
+
+## Core API
+
+### `@WithDocs()` — class decorator
+
+Registers the controller in `DocfyRegistry` for companion file discovery. Also sets `Reflect` metadata key `'docfy:with_docs'` on the class for external introspection.
+
+```ts
+import { WithDocs } from 'nestjs-docfy';
+
+@WithDocs()
+@Controller('users')
+export class UsersController { ... }
+```
+
+### `docs(controllerClass, config)` — called in companion file
+
+Applies Swagger decorators to a controller class from outside its own file.
+
+```ts
+import { docs } from 'nestjs-docfy';
+import { UsersController } from './users.controller';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+
+docs(UsersController, {
+  classDecorators: [ApiTags('users')],
+  methods: {
+    findAll: [
+      ApiOperation({ summary: 'List all users' }),
+      ApiResponse({ status: 200, type: [UserEntity] }),
+    ],
+  },
+});
+```
+
+`config.classDecorators` — `ClassDecorator[]` applied to the class constructor.
+`config.methods` — `Record<string, MethodDecorator[]>` applied per method name.
+
+### `DocfyModule.forRoot(options?)` — dynamic module
+
+| Option | Type | Default | Description |
+|---|---|---|---|
+| `strict` | `boolean` | `false` | Throw at startup if a docs file is missing. Recommended for CI. |
+
+### `resetDocfyRegistry()` — testing utility
+
+Import from `nestjs-docfy/testing`. Call in `beforeEach` to clear registered controllers between test suites.
+
+## File naming convention
+
+| Controller | Companion docs file |
+|---|---|
+| `src/users/users.controller.ts` | `src/users/users.controller.docs.ts` |
+| `dist/users/users.controller.js` | `dist/users/users.controller.docs.js` |
+
+Works identically in `ts-node` (development) and compiled `dist/` (production).
+
+## Constraints
+
+- CommonJS only (`require()`-based discovery). ESM is not supported.
+- Controllers must be exported directly from their own file, not exclusively via a barrel `index.ts`.
+- Barrel re-exports are handled: if a class appears in multiple `require.cache` entries, the `.controller.` file is preferred over barrel files.
+
+## Source files
+
+- [src/with-docs.decorator.ts](src/with-docs.decorator.ts) — `@WithDocs()` decorator and `DOCFY_MARKER` constant
+- [src/docs.ts](src/docs.ts) — `docs()` function that applies decorators
+- [src/docfy.module.ts](src/docfy.module.ts) — `DocfyModule` with `forRoot()` and `_loadAllDocs()`
+- [src/resolve-docs-path.ts](src/resolve-docs-path.ts) — `require.cache` traversal and path resolution
+- [src/registry.ts](src/registry.ts) — `DocfyRegistry` singleton
+- [src/index.ts](src/index.ts) — public API exports
+- [src/testing.ts](src/testing.ts) — test utilities (`nestjs-docfy/testing` entry point)
