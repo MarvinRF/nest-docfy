@@ -4,16 +4,28 @@
   "description": "Keep your NestJS controllers clean — Swagger docs live in a separate companion file by naming convention",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./testing": {
+      "require": "./dist/testing.js",
+      "types": "./dist/testing.d.ts"
+    }
+  },
   "files": [
     "dist"
   ],
+  "engines": {
+    "node": ">=16.0.0"
+  },
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "build:watch": "tsc -p tsconfig.build.json --watch",
     "test": "jest",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
-    "lint": "eslint src/**/*.ts",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
@@ -21,7 +33,8 @@
     "swagger",
     "openapi",
     "decorator",
-    "documentation"
+    "documentation",
+    "companion"
   ],
   "author": "",
   "license": "MIT",

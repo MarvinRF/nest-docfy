@@ -6,7 +6,19 @@ function makeCache(filename: string, target: Function) {
   return () => ({ [filename]: { exports: { [target.name]: target } } });
 }
 
-describe('DocfyModule.loadAllDocs()', () => {
+function missingFileError(docsPath: string) {
+  return Object.assign(new Error(`Cannot find module '${docsPath}'`), {
+    code: 'MODULE_NOT_FOUND',
+  });
+}
+
+function missingDependencyError(depPath: string) {
+  return Object.assign(new Error(`Cannot find module '${depPath}'`), {
+    code: 'MODULE_NOT_FOUND',
+  });
+}
+
+describe('DocfyModule._loadAllDocs()', () => {
   let mockRequire: jest.Mock;
 
   beforeEach(() => {
@@ -19,20 +31,9 @@ describe('DocfyModule.loadAllDocs()', () => {
     DocfyRegistry.add(UsersController);
     const cache = makeCache('/app/dist/users/users.controller.js', UsersController);
 
-    DocfyModule.loadAllDocs(mockRequire, cache);
+    DocfyModule._loadAllDocs({}, mockRequire, cache);
 
     expect(mockRequire).toHaveBeenCalledWith('/app/dist/users/users.controller.docs.js');
-  });
-
-  it('skips and warns when resolveDocsPath returns null (class not in cache)', () => {
-    class OrphanController {}
-    DocfyRegistry.add(OrphanController);
-    const warnSpy = jest.spyOn(DocfyModule['logger' as never] as any, 'warn').mockImplementation(() => {});
-
-    DocfyModule.loadAllDocs(mockRequire, () => ({}));
-
-    expect(mockRequire).not.toHaveBeenCalled();
-    warnSpy.mockRestore();
   });
 
   it('loads docs for multiple controllers', () => {
@@ -45,36 +46,88 @@ describe('DocfyModule.loadAllDocs()', () => {
       '/app/dist/b.controller.js': { exports: { CtrlB } },
     });
 
-    DocfyModule.loadAllDocs(mockRequire, cache);
+    DocfyModule._loadAllDocs({}, mockRequire, cache);
 
     expect(mockRequire).toHaveBeenCalledTimes(2);
     expect(mockRequire).toHaveBeenCalledWith('/app/dist/a.controller.docs.js');
     expect(mockRequire).toHaveBeenCalledWith('/app/dist/b.controller.docs.js');
   });
 
-  it('swallows MODULE_NOT_FOUND (missing docs file is allowed)', () => {
-    class NoDocsController {}
-    DocfyRegistry.add(NoDocsController);
-    const cache = makeCache('/app/no.controller.js', NoDocsController);
+  it('skips (warns) when resolveDocsPath returns null — default mode', () => {
+    class OrphanController {}
+    DocfyRegistry.add(OrphanController);
 
-    const err = Object.assign(new Error('Not found'), { code: 'MODULE_NOT_FOUND' });
-    mockRequire.mockImplementation(() => { throw err; });
-
-    expect(() => DocfyModule.loadAllDocs(mockRequire, cache)).not.toThrow();
+    expect(() => DocfyModule._loadAllDocs({}, mockRequire, () => ({}))).not.toThrow();
+    expect(mockRequire).not.toHaveBeenCalled();
   });
 
-  it('rethrows unexpected errors from the docs file', () => {
+  it('throws when resolveDocsPath returns null — strict mode', () => {
+    class OrphanController {}
+    DocfyRegistry.add(OrphanController);
+
+    expect(() =>
+      DocfyModule._loadAllDocs({ strict: true }, mockRequire, () => ({})),
+    ).toThrow('[nestjs-docfy]');
+  });
+
+  describe('MODULE_NOT_FOUND handling', () => {
+    it('warns (not throws) when the docs file itself is missing — default mode', () => {
+      class NoDocsController {}
+      DocfyRegistry.add(NoDocsController);
+      const cache = makeCache('/app/no.controller.js', NoDocsController);
+      const docsPath = '/app/no.controller.docs.js';
+
+      mockRequire.mockImplementation(() => { throw missingFileError(docsPath); });
+
+      expect(() => DocfyModule._loadAllDocs({}, mockRequire, cache)).not.toThrow();
+    });
+
+    it('throws when the docs file is missing — strict mode', () => {
+      class StrictNoDocsController {}
+      DocfyRegistry.add(StrictNoDocsController);
+      const cache = makeCache('/app/strict.controller.js', StrictNoDocsController);
+      const docsPath = '/app/strict.controller.docs.js';
+
+      mockRequire.mockImplementation(() => { throw missingFileError(docsPath); });
+
+      expect(() =>
+        DocfyModule._loadAllDocs({ strict: true }, mockRequire, cache),
+      ).toThrow('[nestjs-docfy]');
+    });
+
+    it('rethrows MODULE_NOT_FOUND for a missing dependency inside the docs file', () => {
+      class BadImportController {}
+      DocfyRegistry.add(BadImportController);
+      const cache = makeCache('/app/bad-import.controller.js', BadImportController);
+
+      // The missing module is a dependency, not the docs file itself
+      mockRequire.mockImplementation(() => {
+        throw missingDependencyError('/app/some-missing-dep');
+      });
+
+      expect(() =>
+        DocfyModule._loadAllDocs({}, mockRequire, cache),
+      ).toThrow("Cannot find module '/app/some-missing-dep'");
+    });
+  });
+
+  it('rethrows unexpected errors (e.g. syntax error in docs file)', () => {
     class BadController {}
     DocfyRegistry.add(BadController);
     const cache = makeCache('/app/bad.controller.js', BadController);
 
-    mockRequire.mockImplementation(() => { throw new Error('Syntax error'); });
+    mockRequire.mockImplementation(() => { throw new Error('SyntaxError: Unexpected token'); });
 
-    expect(() => DocfyModule.loadAllDocs(mockRequire, cache)).toThrow('Syntax error');
+    expect(() => DocfyModule._loadAllDocs({}, mockRequire, cache)).toThrow('SyntaxError');
   });
 
   it('forRoot() returns a valid DynamicModule', () => {
     const result = DocfyModule.forRoot();
+    expect(result).toMatchObject({ module: DocfyModule });
+  });
+
+  it('forRoot() with strict option is valid', () => {
+    const result = DocfyModule.forRoot({ strict: true });
     expect(result).toMatchObject({ module: DocfyModule });
   });
 });
