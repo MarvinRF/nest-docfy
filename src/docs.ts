@@ -1,10 +1,10 @@
-type Constructor = new (...args: any[]) => any;
+type Constructor<T = any> = new (...args: any[]) => T;
 
-export interface DocsConfig {
+export interface DocsConfig<T = any> {
   /** Class-level decorators (e.g. ApiTags). Applied to the constructor. */
   classDecorators?: ClassDecorator[];
   /** Method-level decorators keyed by method name. */
-  methods?: Record<string, MethodDecorator[]>;
+  methods?: Partial<Record<keyof T, MethodDecorator[]>>;
 }
 
 /**
@@ -23,7 +23,7 @@ export interface DocsConfig {
  *   },
  * });
  */
-export function docs(controllerClass: Constructor, config: DocsConfig): void {
+export function docs<T>(controllerClass: Constructor<T>, config: DocsConfig<T>): void {
   if (config.classDecorators) {
     for (const decorator of config.classDecorators) {
       decorator(controllerClass);
@@ -32,7 +32,7 @@ export function docs(controllerClass: Constructor, config: DocsConfig): void {
 
   if (!config.methods) return;
 
-  for (const [methodName, decorators] of Object.entries(config.methods)) {
+  for (const [methodName, decorators] of Object.entries(config.methods) as [string, MethodDecorator[]][]) {
     const descriptor = Object.getOwnPropertyDescriptor(
       controllerClass.prototype,
       methodName,

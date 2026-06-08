@@ -110,7 +110,7 @@ describe('docs()', () => {
     const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
 
     docs(Ctrl, {
-      methods: { nonExistentMethod: [makeApiOperation({ summary: 'Oops' })] },
+      methods: { nonExistentMethod: [makeApiOperation({ summary: 'Oops' })] } as any,
     });
 
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('"nonExistentMethod"'));
