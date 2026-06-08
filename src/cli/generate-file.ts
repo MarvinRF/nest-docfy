@@ -1,24 +1,20 @@
 import path from 'path';
-import type { ControllerInfo, MethodInfo } from './extract-methods';
+import type { ControllerInfo, MethodInfo, ResponseTypeInfo } from './extract-methods';
 
 // ---------------------------------------------------------------------------
-// Sanitisation helpers — values from AST go through these before any
-// string interpolation so they can never inject executable code.
+// Sanitisation helpers
 // ---------------------------------------------------------------------------
 
-/** Whitelist for JS identifiers: letters, digits, $ and _. */
 const IDENTIFIER_RE = /^[$_a-zA-Z][$_a-zA-Z0-9]*$/;
 
 function sanitizeIdentifier(value: string, fallback: string): string {
   return IDENTIFIER_RE.test(value) ? value : fallback;
 }
 
-/** Strips characters that could close a JS string or inject code into a comment. */
 function sanitizeComment(value: string): string {
   return value.replace(/[`'"\\*]/g, '').slice(0, 200);
 }
 
-/** Escapes a URL path for safe use inside a line comment. */
 function sanitizeHttpPath(value: string | null): string {
   if (!value) return '';
   return '/' + value.replace(/[^a-zA-Z0-9/_:.-]/g, '');
@@ -32,7 +28,7 @@ function defaultStatusCode(httpDecorator: string | null): number {
   switch (httpDecorator) {
     case 'Post':   return 201;
     case 'Delete': return 204;
-    default:       return 200; // Get, Put, Patch, Head, Options, All
+    default:       return 200;
   }
 }
 
@@ -40,14 +36,46 @@ function defaultStatusCode(httpDecorator: string | null): number {
 // Import path resolution
 // ---------------------------------------------------------------------------
 
-/**
- * Computes the relative import path from the generated docs file to the
- * controller file, stripping the .ts extension (CommonJS/ESM convention).
- */
 export function relativeImport(docsFilePath: string, controllerFilePath: string): string {
   const rel = path.relative(path.dirname(docsFilePath), controllerFilePath);
   const withoutExt = rel.replace(/\.ts$/, '');
   return withoutExt.startsWith('.') ? withoutExt : `./${withoutExt}`;
+}
+
+// ---------------------------------------------------------------------------
+// Response type imports collector
+// ---------------------------------------------------------------------------
+
+interface ResolvedImport {
+  name: string;
+  importPath: string;
+}
+
+/**
+ * Collects all unique response type imports needed for a controller's methods.
+ * Deduplicates by type name — if two methods return the same type, one import.
+ * Validates each type name with IDENTIFIER_RE before including.
+ */
+function collectResponseImports(
+  methods: MethodInfo[],
+  docsFilePath: string,
+): ResolvedImport[] {
+  const seen = new Map<string, string>(); // name → importPath
+
+  for (const m of methods) {
+    const rt = m.responseType;
+    if (!rt) continue;
+    if (!IDENTIFIER_RE.test(rt.name)) continue; // safety: skip invalid identifiers
+    if (seen.has(rt.name)) continue;
+
+    const rel = path.relative(path.dirname(docsFilePath), rt.absolutePath);
+    const importPath = rel.replace(/\.ts$/, '').replace(/\\/g, '/');
+    const normalized = importPath.startsWith('.') ? importPath : `./${importPath}`;
+
+    seen.set(rt.name, normalized);
+  }
+
+  return Array.from(seen.entries()).map(([name, importPath]) => ({ name, importPath }));
 }
 
 // ---------------------------------------------------------------------------
@@ -71,21 +99,40 @@ function methodSignatureComment(m: MethodInfo): string {
 }
 
 // ---------------------------------------------------------------------------
-// Template
+// ApiResponse rendering
+// ---------------------------------------------------------------------------
+
+function renderApiResponse(status: number, responseType: ResponseTypeInfo | null): string {
+  if (!responseType || !IDENTIFIER_RE.test(responseType.name)) {
+    return `ApiResponse({ status: ${status} })`;
+  }
+  const typePart = responseType.isArray
+    ? `[${responseType.name}]`
+    : responseType.name;
+  return `ApiResponse({ status: ${status}, type: ${typePart} })`;
+}
+
+// ---------------------------------------------------------------------------
+// Method block
 // ---------------------------------------------------------------------------
 
 function renderMethod(m: MethodInfo, indent: string): string {
   const name = sanitizeIdentifier(m.name, '_method');
   const sig = methodSignatureComment(m);
   const status = defaultStatusCode(m.httpDecorator);
-  const lines: string[] = [];
-  lines.push(`${indent}// ${sig}`);
-  lines.push(`${indent}${name}: [`);
-  lines.push(`${indent}  ApiOperation({ summary: '' }),`);
-  lines.push(`${indent}  ApiResponse({ status: ${status} }),`);
-  lines.push(`${indent}],`);
-  return lines.join('\n');
+  const apiResponse = renderApiResponse(status, m.responseType);
+  return [
+    `${indent}// ${sig}`,
+    `${indent}${name}: [`,
+    `${indent}  ApiOperation({ summary: '' }),`,
+    `${indent}  ${apiResponse},`,
+    `${indent}],`,
+  ].join('\n');
 }
+
+// ---------------------------------------------------------------------------
+// ApiTags value
+// ---------------------------------------------------------------------------
 
 function apiTagValue(ctrl: ControllerInfo): string {
   if (ctrl.controllerPath) return sanitizeComment(ctrl.controllerPath);
@@ -94,10 +141,10 @@ function apiTagValue(ctrl: ControllerInfo): string {
   );
 }
 
-/**
- * Renders a complete .controller.docs.ts file for the given controller.
- * All user-sourced values are sanitised before interpolation.
- */
+// ---------------------------------------------------------------------------
+// Full file renderer
+// ---------------------------------------------------------------------------
+
 export function renderDocsFile(
   ctrl: ControllerInfo,
   docsFilePath: string,
@@ -111,11 +158,17 @@ export function renderDocsFile(
   const timestamp = new Date().toISOString();
   const tag = apiTagValue(ctrl);
 
+  const responseImports = collectResponseImports(ctrl.methods, docsFilePath);
+
   const methodsBlock = ctrl.methods.length === 0
     ? '  // No public HTTP methods found.'
     : ctrl.methods.map((m) => renderMethod(m, '  ')).join('\n\n');
 
   if (format === 'js') {
+    const requireLines = responseImports
+      .map((i) => `const { ${i.name} } = require('${i.importPath}');`)
+      .join('\n');
+
     return [
       `// Auto-generated by nestjs-docfy`,
       `// Generated: ${timestamp}`,
@@ -123,6 +176,7 @@ export function renderDocsFile(
       `const { docs } = require('nestjs-docfy');`,
       `const { ApiTags, ApiOperation, ApiResponse } = require('@nestjs/swagger');`,
       `const { ${className} } = require('${importPath}');`,
+      ...(requireLines ? [requireLines] : []),
       ``,
       `docs(${className}, {`,
       `  classDecorators: [`,
@@ -136,6 +190,10 @@ export function renderDocsFile(
     ].join('\n');
   }
 
+  const importLines = responseImports
+    .map((i) => `import { ${i.name} } from '${i.importPath}';`)
+    .join('\n');
+
   return [
     `/**`,
     ` * Auto-generated by nestjs-docfy`,
@@ -145,6 +203,7 @@ export function renderDocsFile(
     `import { docs } from 'nestjs-docfy';`,
     `import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';`,
     `import { ${className} } from '${importPath}';`,
+    ...(importLines ? [importLines] : []),
     ``,
     `docs(${className}, {`,
     `  classDecorators: [`,

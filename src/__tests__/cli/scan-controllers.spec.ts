@@ -155,6 +155,48 @@ describe('scanApp()', () => {
     });
   });
 
+  describe('AuthController (responseType extraction from DTOs)', () => {
+    let ctrl: (typeof result.controllers)[number];
+    beforeAll(() => {
+      ctrl = result.controllers.find((c) => c.className === 'AuthController')!;
+    });
+
+    it('finds AuthController', () => {
+      expect(ctrl).toBeDefined();
+    });
+
+    it('resolves RegisterResponseDto for register()', () => {
+      const m = ctrl.methods.find((m) => m.name === 'register')!;
+      expect(m.responseType).not.toBeNull();
+      expect(m.responseType?.name).toBe('RegisterResponseDto');
+      expect(m.responseType?.isArray).toBe(false);
+    });
+
+    it('resolves LoginResponseDto for login()', () => {
+      const m = ctrl.methods.find((m) => m.name === 'login')!;
+      expect(m.responseType).not.toBeNull();
+      expect(m.responseType?.name).toBe('LoginResponseDto');
+    });
+
+    it('resolves UserDto[] for listUsers()', () => {
+      const m = ctrl.methods.find((m) => m.name === 'listUsers')!;
+      expect(m.responseType).not.toBeNull();
+      expect(m.responseType?.name).toBe('UserDto');
+      expect(m.responseType?.isArray).toBe(true);
+    });
+
+    it('resolves UserDto for getMe()', () => {
+      const m = ctrl.methods.find((m) => m.name === 'getMe')!;
+      expect(m.responseType?.name).toBe('UserDto');
+      expect(m.responseType?.isArray).toBe(false);
+    });
+
+    it('responseType absolutePath points to auth-response.dto.ts', () => {
+      const m = ctrl.methods.find((m) => m.name === 'register')!;
+      expect(m.responseType?.absolutePath).toContain('auth-response.dto.ts');
+    });
+  });
+
   describe('security', () => {
     it('does not scan files outside the project root', () => {
       const outsideApp = makeApp({ root: '/tmp/outside', tsconfig: path.join(SCAN_ROOT, 'tsconfig.json') });

@@ -13,6 +13,7 @@ function makeCtrl(methodNames: string[]): ControllerInfo {
       httpPath: null,
       params: [],
       returnType: 'unknown',
+      responseType: null,
       isAsync: false,
       isInherited: false,
       inheritedFrom: null,
@@ -81,7 +82,7 @@ describe('mergeDocsFile()', () => {
     ctrl.methods.push({
       name: 'evil); process.exit(1);//',
       httpDecorator: null, httpPath: null, params: [],
-      returnType: 'void', isAsync: false, isInherited: false, inheritedFrom: null,
+      returnType: 'void', responseType: null, isAsync: false, isInherited: false, inheritedFrom: null,
     });
     const result = mergeDocsFile(EXISTING, ctrl)!;
     expect(result.content).not.toContain('process.exit');

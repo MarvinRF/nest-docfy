@@ -15,6 +15,7 @@ function makeCtrl(overrides: Partial<ControllerInfo> = {}): ControllerInfo {
         httpPath: '',
         params: [],
         returnType: 'Promise<string[]>',
+        responseType: null,
         isAsync: true,
         isInherited: false,
         inheritedFrom: null,
@@ -25,6 +26,7 @@ function makeCtrl(overrides: Partial<ControllerInfo> = {}): ControllerInfo {
         httpPath: ':id',
         params: [{ name: 'id', type: 'string', nestDecorator: '@Param' }],
         returnType: 'Promise<string>',
+        responseType: null,
         isAsync: true,
         isInherited: false,
         inheritedFrom: null,
@@ -133,7 +135,7 @@ describe('renderDocsFile() — security: sanitisation', () => {
       methods: [{
         name: 'evil`); process.exit(1);//',
         httpDecorator: null, httpPath: null, params: [],
-        returnType: 'void', isAsync: false, isInherited: false, inheritedFrom: null,
+        returnType: 'void', responseType: null, isAsync: false, isInherited: false, inheritedFrom: null,
       }],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
@@ -160,7 +162,7 @@ describe('renderDocsFile() — security: sanitisation', () => {
         name: 'findAll',
         httpDecorator: 'Get', httpPath: null, params: [],
         returnType: '*/ require("child_process").execSync("id") /*',
-        isAsync: false, isInherited: false, inheritedFrom: null,
+        responseType: null, isAsync: false, isInherited: false, inheritedFrom: null,
       }],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
@@ -187,10 +189,150 @@ describe('renderDocsFile() — edge cases', () => {
         name: 'findAll',
         httpDecorator: 'Get', httpPath: null, params: [],
         returnType: 'unknown',
-        isAsync: false, isInherited: true, inheritedFrom: 'CrudBase',
+        responseType: null, isAsync: false, isInherited: true, inheritedFrom: 'CrudBase',
       }],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).toContain('CrudBase');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Response type — ApiResponse with DTO type
+// ---------------------------------------------------------------------------
+
+describe('renderDocsFile() — responseType', () => {
+  const DTO_PATH = '/project/src/users/user-response.dto.ts';
+
+  it('renders ApiResponse with type for a named DTO', () => {
+    const ctrl = makeCtrl({
+      methods: [{
+        name: 'findOne',
+        httpDecorator: 'Get',
+        httpPath: ':id',
+        params: [],
+        returnType: 'Promise<UserResponseDto>',
+        responseType: { name: 'UserResponseDto', absolutePath: DTO_PATH, isArray: false },
+        isAsync: true, isInherited: false, inheritedFrom: null,
+      }],
+    });
+    const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
+    expect(output).toContain('ApiResponse({ status: 200, type: UserResponseDto })');
+  });
+
+  it('renders ApiResponse with array type for DTO[]', () => {
+    const ctrl = makeCtrl({
+      methods: [{
+        name: 'findAll',
+        httpDecorator: 'Get',
+        httpPath: '',
+        params: [],
+        returnType: 'Promise<UserResponseDto[]>',
+        responseType: { name: 'UserResponseDto', absolutePath: DTO_PATH, isArray: true },
+        isAsync: true, isInherited: false, inheritedFrom: null,
+      }],
+    });
+    const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
+    expect(output).toContain('ApiResponse({ status: 200, type: [UserResponseDto] })');
+  });
+
+  it('adds import for the DTO when responseType is set', () => {
+    const ctrl = makeCtrl({
+      methods: [{
+        name: 'findOne',
+        httpDecorator: 'Get',
+        httpPath: ':id',
+        params: [],
+        returnType: 'Promise<UserResponseDto>',
+        responseType: { name: 'UserResponseDto', absolutePath: DTO_PATH, isArray: false },
+        isAsync: true, isInherited: false, inheritedFrom: null,
+      }],
+    });
+    const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
+    expect(output).toContain("import { UserResponseDto } from './user-response.dto'");
+  });
+
+  it('deduplicates imports when same DTO used in multiple methods', () => {
+    const ctrl = makeCtrl({
+      methods: [
+        {
+          name: 'findOne',
+          httpDecorator: 'Get', httpPath: ':id', params: [],
+          returnType: 'Promise<UserResponseDto>',
+          responseType: { name: 'UserResponseDto', absolutePath: DTO_PATH, isArray: false },
+          isAsync: true, isInherited: false, inheritedFrom: null,
+        },
+        {
+          name: 'update',
+          httpDecorator: 'Put', httpPath: ':id', params: [],
+          returnType: 'Promise<UserResponseDto>',
+          responseType: { name: 'UserResponseDto', absolutePath: DTO_PATH, isArray: false },
+          isAsync: true, isInherited: false, inheritedFrom: null,
+        },
+      ],
+    });
+    const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
+    const importMatches = (output.match(/import \{ UserResponseDto \}/g) ?? []).length;
+    expect(importMatches).toBe(1);
+  });
+
+  it('falls back to ApiResponse without type for null responseType', () => {
+    const ctrl = makeCtrl({
+      methods: [{
+        name: 'findAll',
+        httpDecorator: 'Get', httpPath: '', params: [],
+        returnType: 'Promise<string[]>',
+        responseType: null,
+        isAsync: true, isInherited: false, inheritedFrom: null,
+      }],
+    });
+    const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
+    expect(output).toContain('ApiResponse({ status: 200 })');
+    expect(output).not.toContain('type:');
+  });
+
+  it('skips import for responseType with invalid identifier name', () => {
+    const ctrl = makeCtrl({
+      methods: [{
+        name: 'findOne',
+        httpDecorator: 'Get', httpPath: ':id', params: [],
+        returnType: 'Promise<unknown>',
+        responseType: { name: '123Invalid', absolutePath: DTO_PATH, isArray: false },
+        isAsync: true, isInherited: false, inheritedFrom: null,
+      }],
+    });
+    const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
+    expect(output).not.toContain('123Invalid');
+    expect(output).toContain('ApiResponse({ status: 200 })');
+  });
+
+  it('renders correct import path for cross-directory DTO', () => {
+    const crossDirDtoPath = '/project/src/dto/shared-response.dto.ts';
+    const ctrl = makeCtrl({
+      methods: [{
+        name: 'getShared',
+        httpDecorator: 'Get', httpPath: 'shared', params: [],
+        returnType: 'Promise<SharedResponseDto>',
+        responseType: { name: 'SharedResponseDto', absolutePath: crossDirDtoPath, isArray: false },
+        isAsync: true, isInherited: false, inheritedFrom: null,
+      }],
+    });
+    const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
+    expect(output).toContain("import { SharedResponseDto } from '../dto/shared-response.dto'");
+  });
+
+  it('renders require() for JS format with responseType', () => {
+    const ctrl = makeCtrl({
+      methods: [{
+        name: 'findOne',
+        httpDecorator: 'Get', httpPath: ':id', params: [],
+        returnType: 'Promise<UserResponseDto>',
+        responseType: { name: 'UserResponseDto', absolutePath: DTO_PATH, isArray: false },
+        isAsync: true, isInherited: false, inheritedFrom: null,
+      }],
+    });
+    const output = renderDocsFile(ctrl, DOCS_PATH.replace('.ts', '.js'), 'js');
+    expect(output).toContain("require('./user-response.dto')");
+    expect(output).toContain('UserResponseDto');
   });
 });
