@@ -91,12 +91,12 @@ describe('renderDocsFile() — ts format', () => {
     expect(output).toContain(':id');
   });
 
-  it('contains ApiOperation placeholder comment', () => {
-    expect(output).toContain('// ApiOperation');
+  it('contains ApiOperation ready to use', () => {
+    expect(output).toContain("ApiOperation({ summary: '' })");
   });
 
-  it('contains ApiResponse placeholder comment', () => {
-    expect(output).toContain('// ApiResponse');
+  it('contains ApiResponse ready to use', () => {
+    expect(output).toContain('ApiResponse({ status:');
   });
 
   it('contains generated timestamp comment', () => {
