@@ -1,5 +1,5 @@
 import path from 'path';
-import type { ControllerInfo, MethodInfo, ParamInfo, ResponseTypeInfo } from './extract-methods';
+import type { ControllerInfo, InlineSchema, MethodInfo, ParamInfo, ResponseTypeInfo, SchemaProperty } from './extract-methods';
 
 // ---------------------------------------------------------------------------
 // Sanitisation helpers
@@ -89,6 +89,7 @@ function collectDtoImports(
   const register = (rt: ResponseTypeInfo | null) => {
     if (!rt) return;
     if (!IDENTIFIER_RE.test(rt.name)) return;
+    if (rt.isInterface) return; // interfaces have no runtime value — don't import
     if (seen.has(rt.name)) return;
     seen.set(rt.name, resolvedImportPath(docsFilePath, rt.absolutePath));
   };
@@ -168,6 +169,13 @@ function renderApiBody(p: ParamInfo, indent: string): string | null {
   if (p.nestDecorator !== '@Body' || p.nestDecoratorArg !== null) return null;
 
   if (p.bodyType && IDENTIFIER_RE.test(p.bodyType.name)) {
+    if (p.bodyType.isInterface && p.bodyType.inlineSchema) {
+      const schemaStr = renderSchemaArg(p.bodyType.inlineSchema, false, indent);
+      return `${indent}ApiBody({ schema: ${schemaStr} }),`;
+    }
+    if (p.bodyType.isInterface) {
+      return `${indent}ApiBody({}),`;
+    }
     return `${indent}ApiBody({ type: ${p.bodyType.name} }),`;
   }
 
@@ -180,11 +188,60 @@ function renderApiBody(p: ParamInfo, indent: string): string | null {
 }
 
 // ---------------------------------------------------------------------------
+// Inline schema rendering (for interface-typed DTOs)
+// ---------------------------------------------------------------------------
+
+function renderSchemaProperty(prop: SchemaProperty, indent: string): string {
+  const inner = `${indent}  `;
+  const pairs: string[] = [];
+
+  if (prop.type !== undefined) pairs.push(`${inner}type: '${prop.type}'`);
+  if (prop.nullable) pairs.push(`${inner}nullable: true`);
+  if (prop.items !== undefined) {
+    pairs.push(`${inner}items: ${renderSchemaProperty(prop.items, inner)}`);
+  }
+  if (prop.properties !== undefined) {
+    const propLines = Object.entries(prop.properties)
+      .map(([k, v]) => `${inner}  ${k}: ${renderSchemaProperty(v, `${inner}  `)}`)
+      .join(',\n');
+    pairs.push(`${inner}properties: {\n${propLines},\n${inner}}`);
+  }
+  if (prop.required && prop.required.length > 0) {
+    pairs.push(`${inner}required: [${prop.required.map((r) => `'${r}'`).join(', ')}]`);
+  }
+
+  if (pairs.length === 0) return '{}';
+  return `{\n${pairs.join(',\n')},\n${indent}}`;
+}
+
+function renderSchemaArg(schema: InlineSchema, isArray: boolean, indent: string): string {
+  const inner = `${indent}  `;
+  const objectProp: SchemaProperty = {
+    type: 'object',
+    ...(Object.keys(schema.properties).length > 0 ? { properties: schema.properties } : {}),
+    ...(schema.required.length > 0 ? { required: schema.required } : {}),
+  };
+
+  if (isArray) {
+    return renderSchemaProperty({ type: 'array', items: objectProp }, inner);
+  }
+  return renderSchemaProperty(objectProp, inner);
+}
+
+// ---------------------------------------------------------------------------
 // ApiResponse rendering
 // ---------------------------------------------------------------------------
 
-function renderApiResponse(status: number, responseType: ResponseTypeInfo | null): string {
+function renderApiResponse(status: number, responseType: ResponseTypeInfo | null, baseIndent: string): string {
   if (!responseType || !IDENTIFIER_RE.test(responseType.name)) {
+    return `ApiResponse({ status: ${status} })`;
+  }
+  if (responseType.isInterface && responseType.inlineSchema) {
+    const schemaStr = renderSchemaArg(responseType.inlineSchema, responseType.isArray, baseIndent);
+    return `ApiResponse({\n${baseIndent}  status: ${status},\n${baseIndent}  schema: ${schemaStr},\n${baseIndent}})`;
+  }
+  if (responseType.isInterface) {
+    // fallback: no schema available — emit without type
     return `ApiResponse({ status: ${status} })`;
   }
   const typePart = responseType.isArray
@@ -241,7 +298,7 @@ function renderMethod(m: MethodInfo, indent: string): string {
     if (paramLine) lines.push(paramLine);
   }
 
-  lines.push(`${inner}${renderApiResponse(status, m.responseType)},`);
+  lines.push(`${inner}${renderApiResponse(status, m.responseType, inner)},`);
   lines.push(`${indent}],`);
 
   return lines.join('\n');

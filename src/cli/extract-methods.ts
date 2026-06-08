@@ -1,4 +1,4 @@
-import { ClassDeclaration, MethodDeclaration, ParameterDeclaration, SyntaxKind, Type } from 'ts-morph';
+import { ClassDeclaration, InterfaceDeclaration, MethodDeclaration, ParameterDeclaration, SyntaxKind, Type } from 'ts-morph';
 
 export interface ParamInfo {
   name: string;
@@ -6,6 +6,21 @@ export interface ParamInfo {
   nestDecorator: string | null;    // '@Param', '@Body', '@Query', etc.
   nestDecoratorArg: string | null; // e.g. 'id' from @Param('id'), null when no arg
   bodyType: ResponseTypeInfo | null; // resolved DTO type for @Body() params
+}
+
+export type JsonSchemaType = 'string' | 'number' | 'boolean' | 'integer' | 'array' | 'object';
+
+export interface SchemaProperty {
+  type?: JsonSchemaType;
+  nullable?: boolean;
+  items?: SchemaProperty;
+  properties?: Record<string, SchemaProperty>;
+  required?: string[];
+}
+
+export interface InlineSchema {
+  properties: Record<string, SchemaProperty>;
+  required: string[];
 }
 
 /**
@@ -20,6 +35,14 @@ export interface ResponseTypeInfo {
   absolutePath: string;
   /** True when the original type was an array, e.g. Promise<User[]> */
   isArray: boolean;
+  /**
+   * True when the type is a TypeScript interface (not a class).
+   * Interfaces are erased at runtime and cannot be used as Swagger `type:` values.
+   * When true, `inlineSchema` holds the extracted property definitions.
+   */
+  isInterface: boolean;
+  /** Extracted property schema when `isInterface` is true. Used to emit `schema:` instead of `type:`. */
+  inlineSchema?: InlineSchema;
 }
 
 export interface MethodInfo {
@@ -104,6 +127,109 @@ function getParamDecoratorArg(p: ParameterDeclaration, decoratorName: string): s
   }
 }
 
+// ---------------------------------------------------------------------------
+// Inline schema extraction (for interface-typed DTOs)
+// ---------------------------------------------------------------------------
+
+function typeToSchemaProperty(type: Type, depth: number): SchemaProperty {
+  if (depth > 6) return { type: 'object' };
+
+  try {
+    // Unwrap union: detect nullable and reduce to the non-null type
+    let core = type;
+    let isNullable = false;
+
+    if (type.isUnion()) {
+      const parts = type.getUnionTypes();
+      isNullable = parts.some((t) => t.isNull() || t.isUndefined());
+      const nonNull = parts.filter((t) => !t.isNull() && !t.isUndefined());
+      if (nonNull.length === 1) {
+        core = nonNull[0];
+      } else if (nonNull.length === 0) {
+        return { nullable: true };
+      } else {
+        // Complex multi-type union — omit type hint, keep nullable flag
+        return isNullable ? { nullable: true } : {};
+      }
+    }
+
+    const prop: SchemaProperty = {};
+    if (isNullable) prop.nullable = true;
+
+    if (core.isString() || core.isStringLiteral()) {
+      prop.type = 'string';
+    } else if (core.isBoolean() || core.isBooleanLiteral()) {
+      prop.type = 'boolean';
+    } else if (core.isNumber() || core.isNumberLiteral()) {
+      // Distinguish integer from float via literal value
+      if (core.isNumberLiteral()) {
+        const text = core.getText();
+        prop.type = Number.isInteger(Number(text)) ? 'integer' : 'number';
+      } else {
+        prop.type = 'number';
+      }
+    } else if (core.isArray()) {
+      prop.type = 'array';
+      try {
+        const elem = core.getArrayElementTypeOrThrow();
+        prop.items = typeToSchemaProperty(elem, depth + 1);
+      } catch {
+        prop.items = {};
+      }
+    } else {
+      // Attempt to recurse into an interface or class with properties
+      const sym = core.getSymbol();
+      const decls = sym?.getDeclarations();
+      if (decls && decls.length > 0) {
+        const decl = decls[0];
+        const srcPath = decl.getSourceFile().getFilePath();
+        if (
+          decl.getKind() === SyntaxKind.InterfaceDeclaration &&
+          !srcPath.includes('node_modules') &&
+          !srcPath.endsWith('.d.ts')
+        ) {
+          const nested = buildSchemaFromInterface(decl as InterfaceDeclaration, depth + 1);
+          prop.type = 'object';
+          if (Object.keys(nested.properties).length > 0) prop.properties = nested.properties;
+          if (nested.required.length > 0) prop.required = nested.required;
+        } else {
+          prop.type = 'object';
+        }
+      } else {
+        prop.type = 'object';
+      }
+    }
+
+    return prop;
+  } catch {
+    return {};
+  }
+}
+
+function buildSchemaFromInterface(iface: InterfaceDeclaration, depth: number): InlineSchema {
+  const properties: Record<string, SchemaProperty> = {};
+  const required: string[] = [];
+
+  try {
+    for (const prop of iface.getProperties()) {
+      try {
+        const name = prop.getName();
+        const isOptional = prop.hasQuestionToken();
+        properties[name] = typeToSchemaProperty(prop.getType(), depth);
+        if (!isOptional) required.push(name);
+      } catch {
+        // skip unresolvable property
+      }
+    }
+  } catch {
+    // best-effort
+  }
+
+  return { properties, required };
+}
+
+// ---------------------------------------------------------------------------
+
 /**
  * Resolves a named DTO/class type from a ts-morph Type.
  * Returns null for primitives, anonymous objects, union/intersection, node_modules, .d.ts.
@@ -132,7 +258,13 @@ function resolveNamedType(type: Type, isArray: boolean): ResponseTypeInfo | null
     if (absolutePath.includes('node_modules')) return null;
     if (absolutePath.endsWith('.d.ts')) return null;
 
-    return { name, absolutePath, isArray };
+    const isInterface = declarations[0].getKind() === SyntaxKind.InterfaceDeclaration;
+
+    const inlineSchema = isInterface
+      ? buildSchemaFromInterface(declarations[0] as InterfaceDeclaration, 0)
+      : undefined;
+
+    return { name, absolutePath, isArray, isInterface, inlineSchema };
   } catch {
     return null;
   }

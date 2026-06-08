@@ -1,6 +1,6 @@
 import path from 'path';
 import { renderDocsFile, relativeImport, inferSummary } from '../../cli/generate-file';
-import type { ControllerInfo } from '../../cli/extract-methods';
+import type { ControllerInfo, InlineSchema } from '../../cli/extract-methods';
 
 function makeCtrl(overrides: Partial<ControllerInfo> = {}): ControllerInfo {
   return {
@@ -256,7 +256,7 @@ describe('renderDocsFile() — responseType', () => {
         httpPath: ':id',
         params: [],
         returnType: 'Promise<UserResponseDto>',
-        responseType: { name: 'UserResponseDto', absolutePath: DTO_PATH, isArray: false },
+        responseType: { name: 'UserResponseDto', absolutePath: DTO_PATH, isArray: false, isInterface: false },
         isAsync: true, isInherited: false, inheritedFrom: null, requiresAuth: false,
       }],
     });
@@ -272,7 +272,7 @@ describe('renderDocsFile() — responseType', () => {
         httpPath: '',
         params: [],
         returnType: 'Promise<UserResponseDto[]>',
-        responseType: { name: 'UserResponseDto', absolutePath: DTO_PATH, isArray: true },
+        responseType: { name: 'UserResponseDto', absolutePath: DTO_PATH, isArray: true, isInterface: false },
         isAsync: true, isInherited: false, inheritedFrom: null, requiresAuth: false,
       }],
     });
@@ -288,7 +288,7 @@ describe('renderDocsFile() — responseType', () => {
         httpPath: ':id',
         params: [],
         returnType: 'Promise<UserResponseDto>',
-        responseType: { name: 'UserResponseDto', absolutePath: DTO_PATH, isArray: false },
+        responseType: { name: 'UserResponseDto', absolutePath: DTO_PATH, isArray: false, isInterface: false },
         isAsync: true, isInherited: false, inheritedFrom: null, requiresAuth: false,
       }],
     });
@@ -303,14 +303,14 @@ describe('renderDocsFile() — responseType', () => {
           name: 'findOne',
           httpDecorator: 'Get', httpPath: ':id', params: [],
           returnType: 'Promise<UserResponseDto>',
-          responseType: { name: 'UserResponseDto', absolutePath: DTO_PATH, isArray: false },
+          responseType: { name: 'UserResponseDto', absolutePath: DTO_PATH, isArray: false, isInterface: false },
           isAsync: true, isInherited: false, inheritedFrom: null, requiresAuth: false,
         },
         {
           name: 'update',
           httpDecorator: 'Put', httpPath: ':id', params: [],
           returnType: 'Promise<UserResponseDto>',
-          responseType: { name: 'UserResponseDto', absolutePath: DTO_PATH, isArray: false },
+          responseType: { name: 'UserResponseDto', absolutePath: DTO_PATH, isArray: false, isInterface: false },
           isAsync: true, isInherited: false, inheritedFrom: null, requiresAuth: false,
         },
       ],
@@ -341,7 +341,7 @@ describe('renderDocsFile() — responseType', () => {
         name: 'findOne',
         httpDecorator: 'Get', httpPath: ':id', params: [],
         returnType: 'Promise<unknown>',
-        responseType: { name: '123Invalid', absolutePath: DTO_PATH, isArray: false },
+        responseType: { name: '123Invalid', absolutePath: DTO_PATH, isArray: false, isInterface: false },
         isAsync: true, isInherited: false, inheritedFrom: null, requiresAuth: false,
       }],
     });
@@ -357,7 +357,7 @@ describe('renderDocsFile() — responseType', () => {
         name: 'getShared',
         httpDecorator: 'Get', httpPath: 'shared', params: [],
         returnType: 'Promise<SharedResponseDto>',
-        responseType: { name: 'SharedResponseDto', absolutePath: crossDirDtoPath, isArray: false },
+        responseType: { name: 'SharedResponseDto', absolutePath: crossDirDtoPath, isArray: false, isInterface: false },
         isAsync: true, isInherited: false, inheritedFrom: null, requiresAuth: false,
       }],
     });
@@ -371,7 +371,7 @@ describe('renderDocsFile() — responseType', () => {
         name: 'findOne',
         httpDecorator: 'Get', httpPath: ':id', params: [],
         returnType: 'Promise<UserResponseDto>',
-        responseType: { name: 'UserResponseDto', absolutePath: DTO_PATH, isArray: false },
+        responseType: { name: 'UserResponseDto', absolutePath: DTO_PATH, isArray: false, isInterface: false },
         isAsync: true, isInherited: false, inheritedFrom: null, requiresAuth: false,
       }],
     });
@@ -503,7 +503,7 @@ describe('renderDocsFile() — @ApiBody', () => {
         name: 'create', httpDecorator: 'Post', httpPath: '',
         params: [makeParam({
           nestDecorator: '@Body', nestDecoratorArg: null, type: 'CreateUserDto',
-          bodyType: { name: 'CreateUserDto', absolutePath: DTO_PATH, isArray: false },
+          bodyType: { name: 'CreateUserDto', absolutePath: DTO_PATH, isArray: false, isInterface: false },
         })],
         returnType: 'void', responseType: null,
         isAsync: true, isInherited: false, inheritedFrom: null, requiresAuth: false,
@@ -519,7 +519,7 @@ describe('renderDocsFile() — @ApiBody', () => {
         name: 'create', httpDecorator: 'Post', httpPath: '',
         params: [makeParam({
           nestDecorator: '@Body', nestDecoratorArg: null, type: 'CreateUserDto',
-          bodyType: { name: 'CreateUserDto', absolutePath: DTO_PATH, isArray: false },
+          bodyType: { name: 'CreateUserDto', absolutePath: DTO_PATH, isArray: false, isInterface: false },
         })],
         returnType: 'void', responseType: null,
         isAsync: true, isInherited: false, inheritedFrom: null, requiresAuth: false,
@@ -535,7 +535,7 @@ describe('renderDocsFile() — @ApiBody', () => {
         name: 'create', httpDecorator: 'Post', httpPath: '',
         params: [makeParam({
           nestDecorator: '@Body', nestDecoratorArg: null, type: 'CreateUserDto',
-          bodyType: { name: 'CreateUserDto', absolutePath: DTO_PATH, isArray: false },
+          bodyType: { name: 'CreateUserDto', absolutePath: DTO_PATH, isArray: false, isInterface: false },
         })],
         returnType: 'void', responseType: null,
         isAsync: true, isInherited: false, inheritedFrom: null, requiresAuth: false,
@@ -564,10 +564,10 @@ describe('renderDocsFile() — @ApiBody', () => {
         name: 'update', httpDecorator: 'Put', httpPath: ':id',
         params: [makeParam({
           nestDecorator: '@Body', nestDecoratorArg: null, type: 'UserDto',
-          bodyType: { name: 'UserDto', absolutePath: DTO_PATH, isArray: false },
+          bodyType: { name: 'UserDto', absolutePath: DTO_PATH, isArray: false, isInterface: false },
         })],
         returnType: 'Promise<UserDto>',
-        responseType: { name: 'UserDto', absolutePath: DTO_PATH, isArray: false },
+        responseType: { name: 'UserDto', absolutePath: DTO_PATH, isArray: false, isInterface: false },
         isAsync: true, isInherited: false, inheritedFrom: null, requiresAuth: false,
       }],
     });
@@ -646,5 +646,120 @@ describe('renderDocsFile() — @ApiBearerAuth', () => {
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     const bearerMatches = (output.match(/ApiBearerAuth\(\)/g) ?? []).length;
     expect(bearerMatches).toBe(1); // only the private method
+  });
+});
+
+const DTO_PATH_IFACE = '/project/src/users/register-response.dto.ts';
+
+function makeInterfaceResponseType(overrides: Partial<{ isArray: boolean; schema: InlineSchema }> = {}) {
+  const schema: InlineSchema = overrides.schema ?? {
+    properties: {
+      success: { type: 'boolean' },
+      message: { type: 'string', nullable: true },
+    },
+    required: ['success'],
+  };
+  return {
+    name: 'RegisterResponseDto',
+    absolutePath: DTO_PATH_IFACE,
+    isArray: overrides.isArray ?? false,
+    isInterface: true,
+    inlineSchema: schema,
+  };
+}
+
+describe('renderDocsFile() — interface DTO → schema:', () => {
+  it('emits schema: object instead of type: for interface response', () => {
+    const ctrl = makeCtrl({
+      methods: [{
+        name: 'register', httpDecorator: 'Post', httpPath: '',
+        params: [], returnType: 'Promise<RegisterResponseDto>',
+        responseType: makeInterfaceResponseType(),
+        isAsync: true, isInherited: false, inheritedFrom: null, requiresAuth: false,
+      }],
+    });
+    const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
+    expect(output).toContain("schema:");
+    expect(output).toContain("type: 'object'");
+    expect(output).toContain("type: 'boolean'");
+    expect(output).toContain("type: 'string'");
+    expect(output).toContain("nullable: true");
+    expect(output).toContain("required: ['success']");
+  });
+
+  it('does NOT emit type: RegisterResponseDto (no runtime value reference)', () => {
+    const ctrl = makeCtrl({
+      methods: [{
+        name: 'register', httpDecorator: 'Post', httpPath: '',
+        params: [], returnType: 'Promise<RegisterResponseDto>',
+        responseType: makeInterfaceResponseType(),
+        isAsync: true, isInherited: false, inheritedFrom: null, requiresAuth: false,
+      }],
+    });
+    const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
+    expect(output).not.toContain('type: RegisterResponseDto');
+  });
+
+  it('does NOT import the interface (no runtime value to import)', () => {
+    const ctrl = makeCtrl({
+      methods: [{
+        name: 'register', httpDecorator: 'Post', httpPath: '',
+        params: [], returnType: 'Promise<RegisterResponseDto>',
+        responseType: makeInterfaceResponseType(),
+        isAsync: true, isInherited: false, inheritedFrom: null, requiresAuth: false,
+      }],
+    });
+    const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
+    expect(output).not.toContain("import { RegisterResponseDto }");
+  });
+
+  it('wraps schema in type:array + items when isArray=true', () => {
+    const ctrl = makeCtrl({
+      methods: [{
+        name: 'list', httpDecorator: 'Get', httpPath: '',
+        params: [], returnType: 'Promise<RegisterResponseDto[]>',
+        responseType: makeInterfaceResponseType({ isArray: true }),
+        isAsync: true, isInherited: false, inheritedFrom: null, requiresAuth: false,
+      }],
+    });
+    const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
+    expect(output).toContain("type: 'array'");
+    expect(output).toContain("items:");
+  });
+
+  it('emits schema: for interface @Body params', () => {
+    const ctrl = makeCtrl({
+      methods: [{
+        name: 'register', httpDecorator: 'Post', httpPath: '',
+        params: [{
+          name: 'body', type: 'RegisterResponseDto',
+          nestDecorator: '@Body', nestDecoratorArg: null,
+          bodyType: makeInterfaceResponseType(),
+        }],
+        returnType: 'void', responseType: null,
+        isAsync: false, isInherited: false, inheritedFrom: null, requiresAuth: false,
+      }],
+    });
+    const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
+    expect(output).toContain('ApiBody({ schema:');
+    expect(output).not.toContain('import { RegisterResponseDto }');
+  });
+
+  it('handles interface with no properties gracefully', () => {
+    const ctrl = makeCtrl({
+      methods: [{
+        name: 'register', httpDecorator: 'Post', httpPath: '',
+        params: [], returnType: 'Promise<EmptyDto>',
+        responseType: {
+          name: 'EmptyDto', absolutePath: DTO_PATH_IFACE,
+          isArray: false, isInterface: true,
+          inlineSchema: { properties: {}, required: [] },
+        },
+        isAsync: true, isInherited: false, inheritedFrom: null, requiresAuth: false,
+      }],
+    });
+    const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
+    expect(output).toContain("schema:");
+    expect(output).not.toContain('type: EmptyDto');
   });
 });

@@ -42,6 +42,7 @@ function resolveOutputPath(
   return outPath;
 }
 
+
 /**
  * Writes (or previews) the docs file for a single controller.
  * Handles: create, skip, merge (--force), dry-run.
