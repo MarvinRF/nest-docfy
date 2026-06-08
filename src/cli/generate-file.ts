@@ -1,5 +1,5 @@
 import path from 'path';
-import type { ControllerInfo, MethodInfo, ResponseTypeInfo } from './extract-methods';
+import type { ControllerInfo, MethodInfo, ParamInfo, ResponseTypeInfo } from './extract-methods';
 
 // ---------------------------------------------------------------------------
 // Sanitisation helpers
@@ -18,6 +18,10 @@ function sanitizeComment(value: string): string {
 function sanitizeHttpPath(value: string | null): string {
   if (!value) return '';
   return '/' + value.replace(/[^a-zA-Z0-9/_:.-]/g, '');
+}
+
+function sanitizeParamName(value: string): string {
+  return value.replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 100);
 }
 
 // ---------------------------------------------------------------------------
@@ -42,8 +46,33 @@ export function relativeImport(docsFilePath: string, controllerFilePath: string)
   return withoutExt.startsWith('.') ? withoutExt : `./${withoutExt}`;
 }
 
+function resolvedImportPath(docsFilePath: string, absolutePath: string): string {
+  const rel = path.relative(path.dirname(docsFilePath), absolutePath);
+  const importPath = rel.replace(/\.ts$/, '').replace(/\\/g, '/');
+  return importPath.startsWith('.') ? importPath : `./${importPath}`;
+}
+
 // ---------------------------------------------------------------------------
-// Response type imports collector
+// Primitive TypeScript type → JavaScript constructor name
+// ---------------------------------------------------------------------------
+
+const PRIMITIVE_MAP: Record<string, string> = {
+  string: 'String',
+  number: 'Number',
+  boolean: 'Boolean',
+};
+
+/**
+ * Maps a TS primitive type string to its JS constructor for Swagger.
+ * Returns null for non-primitives (DTOs, unknown, etc.).
+ */
+function primitiveToConstructor(tsType: string): string | null {
+  const base = tsType.replace(/\[\]$/, '').trim();
+  return PRIMITIVE_MAP[base] ?? null;
+}
+
+// ---------------------------------------------------------------------------
+// Unique import collector (response types + body types)
 // ---------------------------------------------------------------------------
 
 interface ResolvedImport {
@@ -51,31 +80,47 @@ interface ResolvedImport {
   importPath: string;
 }
 
-/**
- * Collects all unique response type imports needed for a controller's methods.
- * Deduplicates by type name — if two methods return the same type, one import.
- * Validates each type name with IDENTIFIER_RE before including.
- */
-function collectResponseImports(
+function collectDtoImports(
   methods: MethodInfo[],
   docsFilePath: string,
 ): ResolvedImport[] {
   const seen = new Map<string, string>(); // name → importPath
 
+  const register = (rt: ResponseTypeInfo | null) => {
+    if (!rt) return;
+    if (!IDENTIFIER_RE.test(rt.name)) return;
+    if (seen.has(rt.name)) return;
+    seen.set(rt.name, resolvedImportPath(docsFilePath, rt.absolutePath));
+  };
+
   for (const m of methods) {
-    const rt = m.responseType;
-    if (!rt) continue;
-    if (!IDENTIFIER_RE.test(rt.name)) continue; // safety: skip invalid identifiers
-    if (seen.has(rt.name)) continue;
-
-    const rel = path.relative(path.dirname(docsFilePath), rt.absolutePath);
-    const importPath = rel.replace(/\.ts$/, '').replace(/\\/g, '/');
-    const normalized = importPath.startsWith('.') ? importPath : `./${importPath}`;
-
-    seen.set(rt.name, normalized);
+    register(m.responseType);
+    for (const p of m.params) {
+      register(p.bodyType ?? null);
+    }
   }
 
   return Array.from(seen.entries()).map(([name, importPath]) => ({ name, importPath }));
+}
+
+// ---------------------------------------------------------------------------
+// Swagger decorator set collector (for dynamic imports)
+// ---------------------------------------------------------------------------
+
+type SwaggerDecorator = 'ApiTags' | 'ApiOperation' | 'ApiResponse' | 'ApiParam' | 'ApiBody' | 'ApiQuery' | 'ApiBearerAuth';
+
+function collectSwaggerDecorators(ctrl: ControllerInfo): Set<SwaggerDecorator> {
+  const used = new Set<SwaggerDecorator>(['ApiTags', 'ApiOperation', 'ApiResponse']);
+  for (const m of ctrl.methods) {
+    if (m.requiresAuth) used.add('ApiBearerAuth');
+    for (const p of m.params) {
+      if (p.nestDecorator === '@Param' && p.nestDecoratorArg !== null) used.add('ApiParam');
+      if (p.nestDecorator === '@Query' && p.nestDecoratorArg !== null) used.add('ApiQuery');
+      if (p.nestDecorator === '@Body' && p.nestDecoratorArg === null)  used.add('ApiBody');
+    }
+  }
+  if (ctrl.controllerRequiresAuth) used.add('ApiBearerAuth');
+  return used;
 }
 
 // ---------------------------------------------------------------------------
@@ -99,6 +144,42 @@ function methodSignatureComment(m: MethodInfo): string {
 }
 
 // ---------------------------------------------------------------------------
+// Per-param decorator renderers
+// ---------------------------------------------------------------------------
+
+function renderApiParam(p: ParamInfo, indent: string): string | null {
+  if (p.nestDecorator !== '@Param' || p.nestDecoratorArg === null) return null;
+  const name = sanitizeParamName(p.nestDecoratorArg);
+  if (!name) return null;
+  const constructor = primitiveToConstructor(p.type) ?? 'String';
+  return `${indent}ApiParam({ name: '${name}', type: ${constructor} }),`;
+}
+
+function renderApiQuery(p: ParamInfo, indent: string): string | null {
+  if (p.nestDecorator !== '@Query' || p.nestDecoratorArg === null) return null;
+  const name = sanitizeParamName(p.nestDecoratorArg);
+  if (!name) return null;
+  const constructor = primitiveToConstructor(p.type) ?? 'String';
+  const required = !p.type.includes('?') && !p.type.includes('undefined');
+  return `${indent}ApiQuery({ name: '${name}', type: ${constructor}, required: ${required} }),`;
+}
+
+function renderApiBody(p: ParamInfo, indent: string): string | null {
+  if (p.nestDecorator !== '@Body' || p.nestDecoratorArg !== null) return null;
+
+  if (p.bodyType && IDENTIFIER_RE.test(p.bodyType.name)) {
+    return `${indent}ApiBody({ type: ${p.bodyType.name} }),`;
+  }
+
+  const constructor = primitiveToConstructor(p.type);
+  if (constructor) {
+    return `${indent}ApiBody({ type: ${constructor} }),`;
+  }
+
+  return null;
+}
+
+// ---------------------------------------------------------------------------
 // ApiResponse rendering
 // ---------------------------------------------------------------------------
 
@@ -113,6 +194,28 @@ function renderApiResponse(status: number, responseType: ResponseTypeInfo | null
 }
 
 // ---------------------------------------------------------------------------
+// Summary inference
+// ---------------------------------------------------------------------------
+
+/**
+ * Converts a camelCase method name into a human-readable Swagger summary.
+ * findAll → "Find all", createUser → "Create user", getProfileById → "Get profile by id"
+ */
+export function inferSummary(methodName: string): string {
+  const words = methodName
+    .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2') // HTTPMethod → HTTP Method
+    .replace(/([a-z\d])([A-Z])/g, '$1 $2')      // camelCase → camel Case
+    .split(' ')
+    .filter(Boolean);
+
+  if (words.length === 0) return '';
+
+  return words
+    .map((w, i) => (i === 0 ? w.charAt(0).toUpperCase() + w.slice(1).toLowerCase() : w.toLowerCase()))
+    .join(' ');
+}
+
+// ---------------------------------------------------------------------------
 // Method block
 // ---------------------------------------------------------------------------
 
@@ -120,14 +223,28 @@ function renderMethod(m: MethodInfo, indent: string): string {
   const name = sanitizeIdentifier(m.name, '_method');
   const sig = methodSignatureComment(m);
   const status = defaultStatusCode(m.httpDecorator);
-  const apiResponse = renderApiResponse(status, m.responseType);
-  return [
+  const summary = inferSummary(name); // use sanitized name, not raw m.name
+  const inner = `${indent}  `;
+
+  const lines: string[] = [
     `${indent}// ${sig}`,
     `${indent}${name}: [`,
-    `${indent}  ApiOperation({ summary: '' }),`,
-    `${indent}  ${apiResponse},`,
-    `${indent}],`,
-  ].join('\n');
+    `${inner}ApiOperation({ summary: '${summary}' }),`,
+  ];
+
+  if (m.requiresAuth) lines.push(`${inner}ApiBearerAuth(),`);
+
+  for (const p of m.params) {
+    const paramLine = renderApiParam(p, inner)
+      ?? renderApiQuery(p, inner)
+      ?? renderApiBody(p, inner);
+    if (paramLine) lines.push(paramLine);
+  }
+
+  lines.push(`${inner}${renderApiResponse(status, m.responseType)},`);
+  lines.push(`${indent}],`);
+
+  return lines.join('\n');
 }
 
 // ---------------------------------------------------------------------------
@@ -152,35 +269,43 @@ export function renderDocsFile(
 ): string {
   const importPath = relativeImport(docsFilePath, ctrl.filePath);
   const className = sanitizeIdentifier(ctrl.className, 'Controller');
-  const controllerRoute = ctrl.controllerPath !== null
-    ? ` (route: "${sanitizeHttpPath(ctrl.controllerPath)}")`
-    : '';
-  const timestamp = new Date().toISOString();
   const tag = apiTagValue(ctrl);
 
-  const responseImports = collectResponseImports(ctrl.methods, docsFilePath);
+  const dtoImports = collectDtoImports(ctrl.methods, docsFilePath);
+  const swaggerDecorators = collectSwaggerDecorators(ctrl);
+  const swaggerImportList = [
+    'ApiTags', 'ApiOperation', 'ApiResponse',
+    ...(swaggerDecorators.has('ApiBearerAuth') ? ['ApiBearerAuth'] : []),
+    ...(swaggerDecorators.has('ApiParam') ? ['ApiParam'] : []),
+    ...(swaggerDecorators.has('ApiQuery') ? ['ApiQuery'] : []),
+    ...(swaggerDecorators.has('ApiBody') ? ['ApiBody'] : []),
+  ].join(', ');
+
+  const classDecoratorLines = [
+    `    ApiTags('${tag}'),`,
+    ...(ctrl.controllerRequiresAuth ? [`    ApiBearerAuth(),`] : []),
+  ].join('\n');
 
   const methodsBlock = ctrl.methods.length === 0
     ? '  // No public HTTP methods found.'
     : ctrl.methods.map((m) => renderMethod(m, '  ')).join('\n\n');
 
   if (format === 'js') {
-    const requireLines = responseImports
+    const requireLines = dtoImports
       .map((i) => `const { ${i.name} } = require('${i.importPath}');`)
       .join('\n');
 
     return [
-      `// Auto-generated by nestjs-docfy`,
-      `// Generated: ${timestamp}`,
+      `// Auto-generated by nestjs-docfy — do not edit manually`,
       ``,
       `const { docs } = require('nestjs-docfy');`,
-      `const { ApiTags, ApiOperation, ApiResponse } = require('@nestjs/swagger');`,
+      `const { ${swaggerImportList} } = require('@nestjs/swagger');`,
       `const { ${className} } = require('${importPath}');`,
       ...(requireLines ? [requireLines] : []),
       ``,
       `docs(${className}, {`,
       `  classDecorators: [`,
-      `    ApiTags('${tag}'),`,
+      classDecoratorLines,
       `  ],`,
       `  methods: {`,
       methodsBlock.split('\n').map((l) => (l ? `  ${l}` : l)).join('\n'),
@@ -190,24 +315,20 @@ export function renderDocsFile(
     ].join('\n');
   }
 
-  const importLines = responseImports
+  const importLines = dtoImports
     .map((i) => `import { ${i.name} } from '${i.importPath}';`)
     .join('\n');
 
   return [
-    `/**`,
-    ` * Auto-generated by nestjs-docfy`,
-    ` * Controller: ${className}${controllerRoute}`,
-    ` * Generated: ${timestamp}`,
-    ` */`,
+    `// Auto-generated by nestjs-docfy — do not edit manually`,
     `import { docs } from 'nestjs-docfy';`,
-    `import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';`,
+    `import { ${swaggerImportList} } from '@nestjs/swagger';`,
     `import { ${className} } from '${importPath}';`,
     ...(importLines ? [importLines] : []),
     ``,
     `docs(${className}, {`,
     `  classDecorators: [`,
-    `    ApiTags('${tag}'),`,
+    classDecoratorLines,
     `  ],`,
     `  methods: {`,
     methodsBlock,

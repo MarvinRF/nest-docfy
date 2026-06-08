@@ -12,6 +12,7 @@ export interface CliOptions {
   dryRun: boolean;
   quiet: boolean;
   format: OutputFormat;
+  watch: boolean;
 }
 
 const ALLOWED_GLOB_CHARS = /^[a-zA-Z0-9_\-./\\*?[\]{}!@# ]+$/;
@@ -83,6 +84,7 @@ export function parseAndValidateOptions(raw: {
   dryRun?: boolean;
   quiet?: boolean;
   format?: string;
+  watch?: boolean;
 }): CliOptions {
   const root = path.resolve(raw.root ?? '.');
 
@@ -112,5 +114,6 @@ export function parseAndValidateOptions(raw: {
     dryRun: raw.dryRun ?? false,
     quiet: raw.quiet ?? false,
     format: format as OutputFormat,
+    watch: raw.watch ?? false,
   };
 }

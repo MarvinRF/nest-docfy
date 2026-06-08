@@ -87,6 +87,7 @@ describe('parseAndValidateOptions()', () => {
     expect(opts.force).toBe(false);
     expect(opts.dryRun).toBe(false);
     expect(opts.quiet).toBe(false);
+    expect(opts.watch).toBe(false);
     expect(opts.format).toBe('ts');
     expect(opts.tsconfig).toBeUndefined();
     expect(opts.out).toBeUndefined();

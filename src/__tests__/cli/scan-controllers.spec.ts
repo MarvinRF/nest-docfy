@@ -155,7 +155,7 @@ describe('scanApp()', () => {
     });
   });
 
-  describe('AuthController (responseType extraction from DTOs)', () => {
+  describe('AuthController (responseType + param decorators)', () => {
     let ctrl: (typeof result.controllers)[number];
     beforeAll(() => {
       ctrl = result.controllers.find((c) => c.className === 'AuthController')!;
@@ -165,22 +165,20 @@ describe('scanApp()', () => {
       expect(ctrl).toBeDefined();
     });
 
+    // responseType
     it('resolves RegisterResponseDto for register()', () => {
       const m = ctrl.methods.find((m) => m.name === 'register')!;
-      expect(m.responseType).not.toBeNull();
       expect(m.responseType?.name).toBe('RegisterResponseDto');
       expect(m.responseType?.isArray).toBe(false);
     });
 
     it('resolves LoginResponseDto for login()', () => {
       const m = ctrl.methods.find((m) => m.name === 'login')!;
-      expect(m.responseType).not.toBeNull();
       expect(m.responseType?.name).toBe('LoginResponseDto');
     });
 
     it('resolves UserDto[] for listUsers()', () => {
       const m = ctrl.methods.find((m) => m.name === 'listUsers')!;
-      expect(m.responseType).not.toBeNull();
       expect(m.responseType?.name).toBe('UserDto');
       expect(m.responseType?.isArray).toBe(true);
     });
@@ -194,6 +192,75 @@ describe('scanApp()', () => {
     it('responseType absolutePath points to auth-response.dto.ts', () => {
       const m = ctrl.methods.find((m) => m.name === 'register')!;
       expect(m.responseType?.absolutePath).toContain('auth-response.dto.ts');
+    });
+
+    // @Body extraction
+    it('resolves bodyType for register() @Body dto: RegisterDto', () => {
+      const m = ctrl.methods.find((m) => m.name === 'register')!;
+      const bodyParam = m.params.find((p) => p.nestDecorator === '@Body')!;
+      expect(bodyParam).toBeDefined();
+      expect(bodyParam.nestDecoratorArg).toBeNull();
+      expect(bodyParam.bodyType?.name).toBe('RegisterDto');
+    });
+
+    it('resolves bodyType for login() @Body dto: LoginDto', () => {
+      const m = ctrl.methods.find((m) => m.name === 'login')!;
+      const bodyParam = m.params.find((p) => p.nestDecorator === '@Body')!;
+      expect(bodyParam.bodyType?.name).toBe('LoginDto');
+    });
+
+    // @Query extraction
+    it('extracts nestDecoratorArg for @Query params in listUsers()', () => {
+      const m = ctrl.methods.find((m) => m.name === 'listUsers')!;
+      const pageParam = m.params.find((p) => p.nestDecoratorArg === 'page')!;
+      expect(pageParam).toBeDefined();
+      expect(pageParam.nestDecorator).toBe('@Query');
+      const qParam = m.params.find((p) => p.nestDecoratorArg === 'q')!;
+      expect(qParam.nestDecorator).toBe('@Query');
+    });
+
+    // @Param extraction
+    it('extracts nestDecoratorArg for @Param in getUser()', () => {
+      const m = ctrl.methods.find((m) => m.name === 'getUser')!;
+      const idParam = m.params.find((p) => p.nestDecorator === '@Param')!;
+      expect(idParam).toBeDefined();
+      expect(idParam.nestDecoratorArg).toBe('id');
+    });
+  });
+
+  describe('GuardedController (@UseGuards detection)', () => {
+    let guarded: (typeof result.controllers)[number];
+    let partial: (typeof result.controllers)[number];
+    beforeAll(() => {
+      guarded = result.controllers.find((c) => c.className === 'GuardedController')!;
+      partial = result.controllers.find((c) => c.className === 'PartialGuardController')!;
+    });
+
+    it('finds GuardedController', () => expect(guarded).toBeDefined());
+    it('finds PartialGuardController', () => expect(partial).toBeDefined());
+
+    it('sets controllerRequiresAuth=true when @UseGuards is on the class', () => {
+      expect(guarded.controllerRequiresAuth).toBe(true);
+    });
+
+    it('all methods on GuardedController have requiresAuth=true', () => {
+      for (const m of guarded.methods) {
+        expect(m.requiresAuth).toBe(true);
+      }
+    });
+
+    it('sets controllerRequiresAuth=false when no class-level guard', () => {
+      expect(partial.controllerRequiresAuth).toBe(false);
+    });
+
+    it('publicRoute has requiresAuth=false', () => {
+      const m = partial.methods.find((m) => m.name === 'publicRoute')!;
+      expect(m.requiresAuth).toBe(false);
+    });
+
+    it('privateRoute has requiresAuth=true (method-level guard)', () => {
+      const m = partial.methods.find((m) => m.name === 'privateRoute')!;
+      expect(m.requiresAuth).toBe(true);
     });
   });
 

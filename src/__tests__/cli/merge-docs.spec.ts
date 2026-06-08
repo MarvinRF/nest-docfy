@@ -7,6 +7,7 @@ function makeCtrl(methodNames: string[]): ControllerInfo {
     filePath: '/project/src/users/users.controller.ts',
     controllerPath: 'users',
     hasDocsFile: true,
+    controllerRequiresAuth: false,
     methods: methodNames.map((name) => ({
       name,
       httpDecorator: 'Get',
@@ -17,6 +18,7 @@ function makeCtrl(methodNames: string[]): ControllerInfo {
       isAsync: false,
       isInherited: false,
       inheritedFrom: null,
+      requiresAuth: false,
     })),
   };
 }
@@ -82,7 +84,7 @@ describe('mergeDocsFile()', () => {
     ctrl.methods.push({
       name: 'evil); process.exit(1);//',
       httpDecorator: null, httpPath: null, params: [],
-      returnType: 'void', responseType: null, isAsync: false, isInherited: false, inheritedFrom: null,
+      returnType: 'void', responseType: null, isAsync: false, isInherited: false, inheritedFrom: null, requiresAuth: false,
     });
     const result = mergeDocsFile(EXISTING, ctrl)!;
     expect(result.content).not.toContain('process.exit');

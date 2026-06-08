@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { Project } from 'ts-morph';
 import { assertWithinRoot } from './parse-args';
-import { extractMethods, extractControllerPath, ControllerInfo } from './extract-methods';
+import { extractMethods, extractControllerPath, extractControllerAuth, ControllerInfo } from './extract-methods';
 import type { ProjectApp } from './project-types';
 
 export interface ScanResult {
@@ -126,7 +126,8 @@ export function scanApp(
         if (!className) continue;
 
         const controllerPath = extractControllerPath(cls);
-        const methods = extractMethods(cls);
+        const controllerRequiresAuth = extractControllerAuth(cls);
+        const methods = extractMethods(cls, controllerRequiresAuth);
 
         const docsFilePath = deriveDocsFilePath(filePath, format);
         const hasDocsFile = (() => {
@@ -139,6 +140,7 @@ export function scanApp(
           controllerPath,
           methods,
           hasDocsFile,
+          controllerRequiresAuth,
         });
       }
     } catch (err) {
