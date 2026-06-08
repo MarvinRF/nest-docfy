@@ -1,0 +1,1 @@
+{"compilerOptions":{"module":"commonjs","target":"ES2020","experimentalDecorators":true,"emitDecoratorMetadata":true,"strict":true,"skipLibCheck":true},"include":["src"]}

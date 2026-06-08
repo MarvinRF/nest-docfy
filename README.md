@@ -142,45 +142,48 @@ export class UsersController {
 }
 ```
 
-### 3. Create the companion docs file
+### 3. Generate the companion docs files
 
-Name it exactly like the controller, replacing `.controller.ts` with `.controller.docs.ts`:
+Run the CLI to scan your project and generate a pre-filled `*.controller.docs.ts` for every controller:
 
+```bash
+npx nestjs-docfy generate
 ```
-src/users/users.controller.ts       ← your controller
-src/users/users.controller.docs.ts  ← documentation goes here
-```
+
+This produces files like:
 
 ```ts
-// users.controller.docs.ts
-import { HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse, ApiParam, ApiBody } from '@nestjs/swagger';
-import { UsersController } from './users.controller';
-import { UserEntity } from './user.entity';
-import { CreateUserDto } from './dto/create-user.dto';
+// users.controller.docs.ts (generated — fill in the arrays)
 import { docs } from 'nestjs-docfy';
+import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { UsersController } from './users.controller';
 
 docs(UsersController, {
-  classDecorators: [ApiTags('users')],
+  classDecorators: [
+    // ApiTags('users'),
+  ],
   methods: {
+    // GET /users → async findAll(): Promise<UserEntity[]>
     findAll: [
-      ApiOperation({ summary: 'List all users' }),
-      ApiResponse({ status: HttpStatus.OK, type: [UserEntity] }),
+      // ApiOperation({ summary: '' }),
+      // ApiResponse({ status: 200, type: [UserEntity] }),
     ],
+
+    // GET /:id → async findOne(id: string): Promise<UserEntity>
     findOne: [
-      ApiOperation({ summary: 'Get a user by ID' }),
-      ApiParam({ name: 'id', description: 'User UUID' }),
-      ApiResponse({ status: HttpStatus.OK, type: UserEntity }),
-      ApiResponse({ status: HttpStatus.NOT_FOUND, description: 'User not found' }),
-    ],
-    create: [
-      ApiOperation({ summary: 'Create a user' }),
-      ApiBody({ type: CreateUserDto }),
-      ApiResponse({ status: HttpStatus.CREATED, type: UserEntity }),
-      ApiResponse({ status: HttpStatus.BAD_REQUEST, description: 'Invalid input' }),
+      // ApiOperation({ summary: '' }),
+      // ApiResponse({ status: 200, type: UserEntity }),
+      // ApiResponse({ status: 404 }),
     ],
   },
 });
+```
+
+Or create the file manually following the same convention:
+
+```text
+src/users/users.controller.ts       ← your controller
+src/users/users.controller.docs.ts  ← documentation goes here
 ```
 
 ### 4. Keep `main.ts` unchanged
@@ -198,14 +201,77 @@ async function bootstrap() {
 }
 ```
 
+## CLI — `nestjs-docfy generate`
+
+Scans your project for NestJS controllers using **static analysis only** (no code execution) and generates companion `*.controller.docs.ts` files with every method pre-filled and ready to annotate.
+
+### Basic usage
+
+```bash
+# Auto-detect project type and generate all docs files
+npx nestjs-docfy generate
+
+# Preview what would be generated without writing anything
+npx nestjs-docfy generate --dry-run
+
+# Add new methods to existing docs files without touching decorated ones
+npx nestjs-docfy generate --force
+```
+
+### Options
+
+| Option              | Default                   | Description                                                       |
+| ------------------- | ------------------------- | ----------------------------------------------------------------- |
+| `--root <path>`     | `.`                       | Project root directory                                            |
+| `--tsconfig <path>` | auto-detected             | Path to `tsconfig.json`                                           |
+| `--pattern <glob>`  | `**/*.controller.ts`      | Glob pattern to find controllers                                  |
+| `--out <path>`      | alongside each controller | Output directory for generated files                              |
+| `--force`           | `false`                   | Merge new methods into existing docs files (preserves user edits) |
+| `--dry-run`         | `false`                   | Print what would be generated without writing files               |
+| `--quiet`           | `false`                   | Suppress all output except errors (CI-friendly)                   |
+| `--format`          | `ts`                      | Output format: `ts` or `js`                                       |
+
+### Project types supported
+
+The CLI auto-detects your project layout — no configuration needed:
+
+| Layout            | Detected when                                          |
+| ----------------- | ------------------------------------------------------ |
+| Simple project    | `tsconfig.json` at root, no monorepo markers           |
+| NX Monorepo       | `nx.json` present                                      |
+| Nest CLI Monorepo | `nest-cli.json` with `"monorepo": true`                |
+| Generic Monorepo  | `packages/` or `apps/` with sub-`package.json` files   |
+
+### Recommended script
+
+Add to your `package.json`:
+
+```json
+"scripts": {
+  "docs:generate": "nestjs-docfy generate"
+}
+```
+
+Then run:
+
+```bash
+npm run docs:generate
+```
+
+### Idempotency and `--force`
+
+Without `--force`: running `generate` twice is safe — existing docs files are skipped entirely.
+
+With `--force`: the CLI merges only **new** methods (methods added to the controller since the docs file was last generated). User-edited decorator arrays are preserved. This makes `--force` safe to run after adding endpoints.
+
 ## API reference
 
 ### `DocfyModule.forRoot(options?)`
 
 Registers the module and loads all companion docs files for controllers marked with `@WithDocs()`.
 
-| Option | Type | Default | Description |
-|---|---|---|---|
+| Option   | Type      | Default | Description                                                                                                 |
+| -------- | --------- | ------- | ----------------------------------------------------------------------------------------------------------- |
 | `strict` | `boolean` | `false` | Throw at startup if a controller has `@WithDocs()` but no companion docs file is found. Recommended for CI. |
 
 ```ts
@@ -243,18 +309,30 @@ const hasDocs = Reflect.getMetadata(DOCFY_MARKER, ProductsController) === true;
 Applies Swagger decorators to a controller class from outside its file.
 Call this at the top level of a `*.controller.docs.ts` file — it runs as a side effect on import.
 
+The function is fully type-safe: `config.methods` only accepts keys that exist on the controller class. Typos are caught at compile time.
+
+```ts
+docs(UsersController, {
+  classDecorators: [ApiTags('users')],
+  methods: {
+    findAll: [...],   // ✔ exists on UsersController
+    typoMethod: [...] // ✖ TypeScript error
+  },
+});
+```
+
 **`config.classDecorators`** — `ClassDecorator[]` — decorators applied to the class constructor (e.g. `ApiTags`).
 
-**`config.methods`** — `Record<string, MethodDecorator[]>` — decorators per method name. Each decorator is called exactly as TypeScript would call it if it were written inline.
+**`config.methods`** — `Partial<Record<keyof T, MethodDecorator[]>>` — decorators per method name. Each decorator is called exactly as TypeScript would call it if it were written inline.
 
-If a method name in `config.methods` does not exist on the controller, a warning is logged and that entry is skipped — the rest of the docs file still applies.
+If a method name in `config.methods` does not exist on the controller at runtime, a warning is logged and that entry is skipped — the rest of the docs file still applies.
 
 ## File naming convention
 
-| Controller file | Companion docs file |
-|---|---|
-| `users.controller.ts` | `users.controller.docs.ts` |
-| `users.controller.js` (compiled) | `users.controller.docs.js` |
+| Controller file                   | Companion docs file          |
+| --------------------------------- | ---------------------------- |
+| `users.controller.ts`             | `users.controller.docs.ts`   |
+| `users.controller.js` (compiled)  | `users.controller.docs.js`   |
 
 Discovery is automatic. `DocfyModule` locates each controller's source file via Node's module cache (`require.cache`) and resolves the companion path. This works identically in both `ts-node` (development) and compiled `dist/` (production).
 
@@ -277,6 +355,8 @@ NestJS calls `NestFactory.create()` to build the dependency graph and module ins
 `DocfyModule.forRoot()` runs synchronously during the `NestFactory.create()` phase (as the module graph is evaluated), which is *before* `SwaggerModule.createDocument()`. At that point, it uses `require()` to load each docs file, which calls `docs()` and writes `Reflect` metadata directly onto the controller methods — exactly as TypeScript decorator syntax would at class-definition time.
 
 By the time `SwaggerModule.createDocument()` scans for metadata, all of it is already in place.
+
+The `generate` CLI uses **static analysis only** (`ts-morph`) — it reads TypeScript AST without executing any project code. All user-supplied paths and values are validated and sanitised before use.
 
 ## License
 

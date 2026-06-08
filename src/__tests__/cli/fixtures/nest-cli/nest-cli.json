@@ -1,0 +1,1 @@
+{"monorepo":true,"projects":{"api":{"root":"apps/api","compilerOptions":{"tsConfigPath":"apps/api/tsconfig.app.json"}},"admin":{"root":"apps/admin"}}}
