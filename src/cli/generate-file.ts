@@ -28,7 +28,8 @@ function sanitizeParamName(value: string): string {
 // HTTP verb → default success status code
 // ---------------------------------------------------------------------------
 
-function defaultStatusCode(httpDecorator: string | null): number {
+function defaultStatusCode(httpDecorator: string | null, httpStatusCode: number | null): number {
+  if (httpStatusCode !== null) return httpStatusCode;
   switch (httpDecorator) {
     case 'Post':   return 201;
     case 'Delete': return 204;
@@ -89,7 +90,8 @@ function collectDtoImports(
   const register = (rt: ResponseTypeInfo | null) => {
     if (!rt) return;
     if (!IDENTIFIER_RE.test(rt.name)) return;
-    if (rt.isInterface) return; // interfaces have no runtime value — don't import
+    if (rt.isInterface) return;   // interfaces have no runtime value — don't import
+    if (rt.classSchema) return;   // using inline schema — type: not referenced, no import needed
     if (seen.has(rt.name)) return;
     seen.set(rt.name, resolvedImportPath(docsFilePath, rt.absolutePath));
   };
@@ -176,6 +178,10 @@ function renderApiBody(p: ParamInfo, indent: string): string | null {
     if (p.bodyType.isInterface) {
       return `${indent}ApiBody({}),`;
     }
+    if (p.bodyType.classSchema) {
+      const schemaStr = renderSchemaArg(p.bodyType.classSchema, false, indent);
+      return `${indent}ApiBody({ schema: ${schemaStr} }),`;
+    }
     return `${indent}ApiBody({ type: ${p.bodyType.name} }),`;
   }
 
@@ -195,8 +201,17 @@ function renderSchemaProperty(prop: SchemaProperty, indent: string): string {
   const inner = `${indent}  `;
   const pairs: string[] = [];
 
-  if (prop.type !== undefined) pairs.push(`${inner}type: '${prop.type}'`);
-  if (prop.nullable) pairs.push(`${inner}nullable: true`);
+  if (prop.type !== undefined)   pairs.push(`${inner}type: '${prop.type}'`);
+  if (prop.format !== undefined) pairs.push(`${inner}format: '${prop.format}'`);
+  if (prop.nullable)             pairs.push(`${inner}nullable: true`);
+  if (prop.minimum !== undefined) pairs.push(`${inner}minimum: ${prop.minimum}`);
+  if (prop.maximum !== undefined) pairs.push(`${inner}maximum: ${prop.maximum}`);
+  if (prop.minLength !== undefined) pairs.push(`${inner}minLength: ${prop.minLength}`);
+  if (prop.maxLength !== undefined) pairs.push(`${inner}maxLength: ${prop.maxLength}`);
+  if (prop.enum && prop.enum.length > 0) {
+    const vals = prop.enum.map((v) => typeof v === 'string' ? `'${v}'` : String(v)).join(', ');
+    pairs.push(`${inner}enum: [${vals}]`);
+  }
   if (prop.items !== undefined) {
     pairs.push(`${inner}items: ${renderSchemaProperty(prop.items, inner)}`);
   }
@@ -265,6 +280,17 @@ function renderApiResponse(status: number, responseType: ResponseTypeInfo | null
   if (responseType.isInterface) {
     return `ApiResponse({ status: ${status}, description: '${description}' })`;
   }
+  // Class with class-validator decorators and no @ApiProperty — emit inline schema
+  if (responseType.classSchema) {
+    const schemaStr = renderSchemaArg(responseType.classSchema, responseType.isArray, baseIndent);
+    return [
+      `ApiResponse({`,
+      `${baseIndent}  status: ${status},`,
+      `${baseIndent}  description: '${description}',`,
+      `${baseIndent}  schema: ${schemaStr},`,
+      `${baseIndent}})`,
+    ].join('\n');
+  }
   const typePart = responseType.isArray
     ? `[${responseType.name}]`
     : responseType.name;
@@ -300,7 +326,7 @@ export function inferSummary(methodName: string): string {
 function renderMethod(m: MethodInfo, indent: string): string {
   const name = sanitizeIdentifier(m.name, '_method');
   const sig = methodSignatureComment(m);
-  const status = defaultStatusCode(m.httpDecorator);
+  const status = defaultStatusCode(m.httpDecorator, m.httpStatusCode);
   const summary = inferSummary(name); // use sanitized name, not raw m.name
   const inner = `${indent}  `;
 

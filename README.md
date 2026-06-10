@@ -27,11 +27,14 @@ Keep your NestJS controllers clean. Swagger documentation lives in a dedicated c
   - [Options](#options)
   - [Project types](#project-types)
   - [Idempotency and --force](#idempotency-and---force)
+- [CLI — check](#cli--check)
 - [API reference](#api-reference)
   - [DocfyModule.forRoot()](#docfymoduleforrootoptions)
   - [@WithDocs()](#withdocs)
   - [docs()](#docscontrollerclass-config)
 - [Interface-typed DTOs](#interface-typed-dtos)
+- [class-validator inference](#class-validator-inference)
+- [@HttpCode() support](#httpcode-support)
 - [File naming convention](#file-naming-convention)
 - [Testing](#testing)
 - [How it works](#how-it-works)
@@ -253,6 +256,54 @@ Add to your `package.json` for convenience:
 }
 ```
 
+## CLI — check
+
+Verify that every controller is fully documented before merging. Exits with code `1` if any drift is detected — designed for CI pipelines.
+
+```bash
+npx nestjs-docfy check [options]
+```
+
+| Option              | Default                   | Description                                 |
+| ------------------- | ------------------------- | ------------------------------------------- |
+| `--root <path>`     | `.`                       | Project root directory                      |
+| `--tsconfig <path>` | auto-detected             | Path to `tsconfig.json`                     |
+| `--pattern <glob>`  | `**/*.controller.ts`      | Glob pattern to find controllers            |
+| `--format <format>` | `ts`                      | Docs file format to look for: `ts` or `js`  |
+| `--quiet`           | `false`                   | Suppress all output except errors           |
+
+**What it checks:**
+
+- Controllers with HTTP methods but no companion docs file
+- Controllers that have methods added since the last `generate` run
+
+**Example output:**
+
+```text
+✖ UsersController — undocumented methods: updateProfile, deleteAccount
+  → run nestjs-docfy generate --force to merge new methods
+
+✖ 2 controller(s) out of sync.
+```
+
+**CI integration:**
+
+```yaml
+# GitHub Actions example
+- name: Check docs are up to date
+  run: npx nestjs-docfy check
+```
+
+Or as an npm script:
+
+```json
+{
+  "scripts": {
+    "docs:check": "nestjs-docfy check"
+  }
+}
+```
+
 ## API reference
 
 ### `DocfyModule.forRoot(options?)`
@@ -333,6 +384,70 @@ ApiResponse({
 ```
 
 Supports: primitives, nullable unions (`T | null`), arrays, nested interfaces, and optional properties (excluded from `required`).
+
+## class-validator inference
+
+When a DTO class uses `class-validator` decorators and does **not** already have `@ApiProperty` on its properties, `nestjs-docfy` infers a full JSON Schema from the validator decorators — no manual annotation required.
+
+```ts
+// create-user.dto.ts
+import { IsString, IsEmail, MinLength, IsOptional } from 'class-validator';
+
+export class CreateUserDto {
+  @IsString()
+  @MinLength(2)
+  name: string;
+
+  @IsEmail()
+  email: string;
+
+  @IsOptional()
+  @IsString()
+  bio?: string;
+}
+```
+
+Generated output:
+
+```ts
+ApiBody({
+  schema: {
+    type: 'object',
+    properties: {
+      name:  { type: 'string', minLength: 2 },
+      email: { type: 'string', format: 'email' },
+      bio:   { type: 'string' },
+    },
+    required: ['name', 'email'],
+  },
+}),
+```
+
+Supported decorators: `@IsString`, `@IsEmail`, `@IsUrl`, `@IsUUID`, `@IsDateString`, `@IsNumber`, `@IsInt`, `@IsBoolean`, `@IsArray`, `@Min`, `@Max`, `@MinLength`, `@MaxLength`, `@IsOptional`.
+
+> If any property in the class already has `@ApiProperty`, inference is skipped and `type: ClassName` is used instead — your existing Swagger annotations are never overwritten.
+
+## @HttpCode() support
+
+NestJS's `@HttpCode()` decorator overrides the default HTTP status code for a route handler. `nestjs-docfy` reads it automatically and uses the correct code in the generated `ApiResponse`.
+
+```ts
+// users.controller.ts
+@Post('logout')
+@HttpCode(204)
+logout(): void { ... }
+```
+
+Generated output:
+
+```ts
+logout: [
+  ApiOperation({ summary: 'Logout' }),
+  ApiResponse({ status: 204, description: 'No Content' }),
+],
+```
+
+Without `@HttpCode()`, the default codes apply: `201` for `@Post`, `200` for all other HTTP verbs.
 
 ## File naming convention
 

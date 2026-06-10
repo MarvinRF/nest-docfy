@@ -12,10 +12,16 @@ export type JsonSchemaType = 'string' | 'number' | 'boolean' | 'integer' | 'arra
 
 export interface SchemaProperty {
   type?: JsonSchemaType;
+  format?: string;
   nullable?: boolean;
   items?: SchemaProperty;
   properties?: Record<string, SchemaProperty>;
   required?: string[];
+  minimum?: number;
+  maximum?: number;
+  minLength?: number;
+  maxLength?: number;
+  enum?: (string | number)[];
 }
 
 export interface InlineSchema {
@@ -43,12 +49,19 @@ export interface ResponseTypeInfo {
   isInterface: boolean;
   /** Extracted property schema when `isInterface` is true. Used to emit `schema:` instead of `type:`. */
   inlineSchema?: InlineSchema;
+  /**
+   * Schema inferred from class-validator decorators when the type is a class.
+   * Only set when the class has class-validator decorators and no `@ApiProperty`.
+   * Used to emit `schema:` instead of `type:` so docs are accurate even without @ApiProperty.
+   */
+  classSchema?: InlineSchema;
 }
 
 export interface MethodInfo {
   name: string;
   httpDecorator: string | null; // 'Get', 'Post', 'Put', 'Patch', 'Delete', 'Head', 'Options', 'All'
   httpPath: string | null;
+  httpStatusCode: number | null; // explicit @HttpCode(n) override, null = use default
   params: ParamInfo[];
   returnType: string;
   responseType: ResponseTypeInfo | null;
@@ -89,6 +102,22 @@ const IDENTIFIER_RE = /^[$_a-zA-Z][$_a-zA-Z0-9]*$/;
 function getDecoratorName(dec: { getName(): string | undefined }): string | null {
   try {
     return dec.getName() ?? null;
+  } catch {
+    return null;
+  }
+}
+
+/** Extracts the numeric argument of @HttpCode(statusCode). Returns null if absent or invalid. */
+function getHttpStatusCode(method: MethodDeclaration): number | null {
+  try {
+    const dec = method.getDecorator('HttpCode');
+    if (!dec) return null;
+    const args = dec.getArguments();
+    if (args.length === 0) return null;
+    const val = Number(args[0].getText());
+    // Accept only valid HTTP status codes; reject anything else (injection, NaN, etc.)
+    if (Number.isInteger(val) && val >= 100 && val <= 599) return val;
+    return null;
   } catch {
     return null;
   }
@@ -229,6 +258,142 @@ function buildSchemaFromInterface(iface: InterfaceDeclaration, depth: number): I
 }
 
 // ---------------------------------------------------------------------------
+// class-validator schema inference (for class-based DTOs)
+// ---------------------------------------------------------------------------
+
+/**
+ * Whitelisted class-validator decorators and their JSON Schema mappings.
+ * Only these names are processed — unknown decorators are ignored.
+ * This prevents any user-defined or third-party decorator from being
+ * misinterpreted as a type hint.
+ */
+const CV_TYPE_MAP: Record<string, { type: JsonSchemaType; format?: string }> = {
+  IsString:     { type: 'string' },
+  IsEmail:      { type: 'string', format: 'email' },
+  IsUrl:        { type: 'string', format: 'uri' },
+  IsUUID:       { type: 'string', format: 'uuid' },
+  IsDateString: { type: 'string', format: 'date-time' },
+  IsNumber:     { type: 'number' },
+  IsInt:        { type: 'integer' },
+  IsPositive:   { type: 'number' },
+  IsNegative:   { type: 'number' },
+  IsBoolean:    { type: 'boolean' },
+  IsArray:      { type: 'array' },
+  IsObject:     { type: 'object' },
+};
+
+/** class-validator decorators that accept a single numeric argument (min/max/length). */
+const CV_NUMERIC_ARG_MAP: Record<string, keyof SchemaProperty> = {
+  Min:       'minimum',
+  Max:       'maximum',
+  MinLength: 'minLength',
+  MaxLength: 'maxLength',
+};
+
+/** Returns true if the class has ANY @ApiProperty decorator on its properties. */
+function classHasApiProperty(cls: ClassDeclaration): boolean {
+  try {
+    for (const prop of cls.getProperties()) {
+      for (const dec of prop.getDecorators()) {
+        try {
+          if (dec.getName() === 'ApiProperty') return true;
+        } catch { /* ignore */ }
+      }
+    }
+  } catch { /* ignore */ }
+  return false;
+}
+
+/** Safely reads the first numeric literal argument of a decorator. */
+function getDecoratorNumericArg(dec: ReturnType<ClassDeclaration['getDecorators']>[number]): number | null {
+  try {
+    const args = dec.getArguments();
+    if (args.length === 0) return null;
+    const val = Number(args[0].getText());
+    return Number.isFinite(val) ? val : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Builds an InlineSchema from a class's class-validator decorators.
+ * Returns null when:
+ *  - the class has @ApiProperty (Swagger will handle it — preserve type:)
+ *  - no class-validator decorators found on any property
+ */
+function buildSchemaFromClass(cls: ClassDeclaration): InlineSchema | null {
+  try {
+    if (classHasApiProperty(cls)) return null;
+
+    const properties: Record<string, SchemaProperty> = {};
+    const required: string[] = [];
+    let foundAny = false;
+
+    for (const prop of cls.getProperties()) {
+      try {
+        const propName = prop.getName();
+        if (!IDENTIFIER_RE.test(propName)) continue;
+
+        const decorators = prop.getDecorators();
+        const decoratorNames = new Set(
+          decorators.map((d) => { try { return d.getName(); } catch { return ''; } }),
+        );
+
+        // Collect type info from whitelisted decorators
+        const schema: SchemaProperty = {};
+        let hasCV = false;
+
+        for (const dec of decorators) {
+          let decName: string;
+          try { decName = dec.getName(); } catch { continue; }
+
+          if (decName === 'IsOptional') {
+            // Mark as optional — won't be pushed to required[]
+            continue;
+          }
+
+          if (CV_TYPE_MAP[decName]) {
+            const mapping = CV_TYPE_MAP[decName];
+            schema.type = mapping.type;
+            if (mapping.format) schema.format = mapping.format;
+            hasCV = true;
+          }
+
+          if (CV_NUMERIC_ARG_MAP[decName]) {
+            const val = getDecoratorNumericArg(dec);
+            if (val !== null) {
+              (schema as Record<string, unknown>)[CV_NUMERIC_ARG_MAP[decName]] = val;
+              hasCV = true;
+            }
+          }
+        }
+
+        if (!hasCV) continue; // skip properties with no recognized CV decorators
+
+        // Nullable: property type contains | null or | undefined, or has @IsOptional
+        const propType = prop.getType();
+        if (propType.isUnion()) {
+          const hasNull = propType.getUnionTypes().some((t) => t.isNull() || t.isUndefined());
+          if (hasNull) schema.nullable = true;
+        }
+
+        const isOptional = prop.hasQuestionToken() || decoratorNames.has('IsOptional');
+
+        properties[propName] = schema;
+        foundAny = true;
+        if (!isOptional) required.push(propName);
+      } catch { /* skip unresolvable property */ }
+    }
+
+    if (!foundAny) return null;
+    return { properties, required };
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
 
 /**
  * Resolves a named DTO/class type from a ts-morph Type.
@@ -264,7 +429,11 @@ function resolveNamedType(type: Type, isArray: boolean): ResponseTypeInfo | null
       ? buildSchemaFromInterface(declarations[0] as InterfaceDeclaration, 0)
       : undefined;
 
-    return { name, absolutePath, isArray, isInterface, inlineSchema };
+    const classSchema = !isInterface && declarations[0].getKind() === SyntaxKind.ClassDeclaration
+      ? buildSchemaFromClass(declarations[0] as ClassDeclaration) ?? undefined
+      : undefined;
+
+    return { name, absolutePath, isArray, isInterface, inlineSchema, classSchema };
   } catch {
     return null;
   }
@@ -423,11 +592,13 @@ export function extractMethods(cls: ClassDeclaration, controllerAuth: boolean): 
 
     const responseType = resolveResponseType(method);
     const methodAuth = hasJwtGuard(method.getDecorators());
+    const httpStatusCode = getHttpStatusCode(method);
 
     results.push({
       name: method.getName(),
       httpDecorator,
       httpPath,
+      httpStatusCode,
       params: extractParams(method),
       returnType,
       responseType,
@@ -462,6 +633,7 @@ export function extractMethods(cls: ClassDeclaration, controllerAuth: boolean): 
           name: method.getName(),
           httpDecorator,
           httpPath: null,
+          httpStatusCode: getHttpStatusCode(method),
           params: extractParams(method),
           returnType: 'unknown',
           responseType: null,

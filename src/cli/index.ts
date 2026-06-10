@@ -8,6 +8,7 @@ import { detectProject } from './detect-project';
 import { scanAllApps } from './scan-controllers';
 import { writeAllDocs } from './writer';
 import { watchProject } from './watch';
+import { checkControllers } from './check';
 
 const program = new Command();
 
@@ -163,6 +164,86 @@ program
       };
       process.on('SIGINT', shutdown);
       process.on('SIGTERM', shutdown);
+
+    } catch (err) {
+      if (err instanceof CliError) {
+        process.stderr.write(`\n${pc.red('✖ Error:')} ${err.message}\n\n`);
+        process.exit(err.exitCode);
+      }
+      if (err instanceof Error) {
+        process.stderr.write(`\n${pc.red('✖ Error:')} ${err.message}\n\n`);
+      } else {
+        process.stderr.write(`\n${pc.red('✖ Unknown error')}\n\n`);
+      }
+      process.exit(CliExitCode.Fatal);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// check command
+// ---------------------------------------------------------------------------
+
+program
+  .command('check')
+  .description('Verify all controllers are fully documented — exits 1 if any drift is found')
+  .option('--root <path>', 'Project root directory', '.')
+  .option('--tsconfig <path>', 'Path to tsconfig.json (auto-detected if omitted)')
+  .option('--pattern <glob>', 'Glob pattern to find controllers', '**/*.controller.ts')
+  .option('--format <format>', 'Docs file format to look for: ts or js', 'ts')
+  .option('--quiet', 'Suppress all output except errors', false)
+  .action(async (rawOpts: Record<string, unknown>) => {
+    try {
+      const options = parseAndValidateOptions({
+        ...rawOpts,
+        force: false,
+        dryRun: false,
+        out: undefined,
+        watch: false,
+      } as Parameters<typeof parseAndValidateOptions>[0]);
+      setQuiet(options.quiet);
+
+      header('nestjs-docfy check');
+      log('info', `Root: ${options.root}`);
+      log('info', `Pattern: ${options.pattern}`);
+      log('info', `Format: ${options.format}`);
+
+      const context = detectProject(options.root, options.tsconfig);
+      const scanResult = scanAllApps(
+        context.apps,
+        context.root,
+        options.pattern !== '**/*.controller.ts' ? options.pattern : undefined,
+        options.format,
+      );
+
+      for (const err of scanResult.errors) {
+        log('error', `${err.file}: ${err.message}`);
+      }
+
+      if (scanResult.controllers.length === 0) {
+        log('warn', 'No controllers found matching the pattern.');
+        process.exit(CliExitCode.Ok);
+        return;
+      }
+
+      const issues = checkControllers(scanResult.controllers, options.format);
+
+      if (issues.length === 0) {
+        log('success', `All ${scanResult.controllers.length} controller(s) are fully documented.`);
+        process.exit(CliExitCode.Ok);
+        return;
+      }
+
+      for (const issue of issues) {
+        if (issue.kind === 'missing-file') {
+          log('error', `${issue.controllerClass} — no companion docs file found at ${issue.docsFile}`);
+        } else {
+          log('error', `${issue.controllerClass} — undocumented methods: ${issue.methods!.join(', ')}`);
+          log('info',  `  → run ${pc.cyan('nestjs-docfy generate --force')} to merge new methods`);
+        }
+      }
+
+      process.stderr.write(`\n${pc.red(`✖ ${issues.length} controller(s) out of sync.`)}\n\n`);
+      process.exit(CliExitCode.PartialError);
 
     } catch (err) {
       if (err instanceof CliError) {
