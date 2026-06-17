@@ -28,6 +28,7 @@ Keep your NestJS controllers clean. Swagger documentation lives in a dedicated c
   - [Project types](#project-types)
   - [Idempotency and --force](#idempotency-and---force)
 - [CLI — check](#cli--check)
+- [CLI — coverage](#cli--coverage)
 - [API reference](#api-reference)
   - [DocfyModule.forRoot()](#docfymoduleforrootoptions)
   - [@WithDocs()](#withdocs)
@@ -300,6 +301,59 @@ Or as an npm script:
 {
   "scripts": {
     "docs:check": "nestjs-docfy check"
+  }
+}
+```
+
+## CLI — coverage
+
+Measure what percentage of your endpoints are documented. Useful as an objective quality metric and as a CI gate.
+
+```bash
+npx nestjs-docfy coverage [options]
+```
+
+| Option              | Default              | Description                                            |
+| ------------------- | -------------------- | ------------------------------------------------------ |
+| `--root <path>`     | `.`                  | Project root directory                                 |
+| `--tsconfig <path>` | auto-detected        | Path to `tsconfig.json`                                |
+| `--pattern <glob>`  | `**/*.controller.ts` | Glob pattern to find controllers                       |
+| `--format <format>` | `ts`                 | Docs file format to look for: `ts` or `js`             |
+| `--min <percent>`   | none                 | Minimum coverage required (0-100) — exits `1` if below |
+| `--quiet`           | `false`              | Suppress all output except errors                      |
+
+**Example output:**
+
+```text
+Controllers: 42
+Endpoints: 187
+
+Documented: 174
+Missing docs: 13
+
+Coverage: 93.0%
+```
+
+**Enforcing a minimum in CI:**
+
+```bash
+npx nestjs-docfy coverage --min 95
+```
+
+When coverage falls below `--min`, the command exits with code `1`, failing the build.
+
+```yaml
+# GitHub Actions example
+- name: Enforce documentation coverage
+  run: npx nestjs-docfy coverage --min 95
+```
+
+Or as an npm script:
+
+```json
+{
+  "scripts": {
+    "docs:coverage": "nestjs-docfy coverage --min 95"
   }
 }
 ```
