@@ -10,6 +10,7 @@ import { writeAllDocs } from './writer';
 import { watchProject } from './watch';
 import { checkControllers } from './check';
 import { computeCoverage } from './coverage';
+import { lintControllers } from './lint';
 
 const program = new Command();
 
@@ -332,6 +333,92 @@ program
       }
 
       process.exit(CliExitCode.Ok);
+
+    } catch (err) {
+      if (err instanceof CliError) {
+        process.stderr.write(`\n${pc.red('✖ Error:')} ${err.message}\n\n`);
+        process.exit(err.exitCode);
+      }
+      if (err instanceof Error) {
+        process.stderr.write(`\n${pc.red('✖ Error:')} ${err.message}\n\n`);
+      } else {
+        process.stderr.write(`\n${pc.red('✖ Unknown error')}\n\n`);
+      }
+      process.exit(CliExitCode.Fatal);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// lint command
+// ---------------------------------------------------------------------------
+
+program
+  .command('lint')
+  .description('Check documentation quality — missing summaries, error responses, body descriptions')
+  .option('--root <path>', 'Project root directory', '.')
+  .option('--tsconfig <path>', 'Path to tsconfig.json (auto-detected if omitted)')
+  .option('--pattern <glob>', 'Glob pattern to find controllers', '**/*.controller.ts')
+  .option('--format <format>', 'Docs file format to look for: ts or js', 'ts')
+  .option('--quiet', 'Suppress all output except errors', false)
+  .action(async (rawOpts: Record<string, unknown>) => {
+    try {
+      const options = parseAndValidateOptions({
+        ...rawOpts,
+        force: false,
+        dryRun: false,
+        out: undefined,
+        watch: false,
+      } as Parameters<typeof parseAndValidateOptions>[0]);
+      setQuiet(options.quiet);
+
+      header('nestjs-docfy lint');
+      log('info', `Root: ${options.root}`);
+      log('info', `Pattern: ${options.pattern}`);
+      log('info', `Format: ${options.format}`);
+
+      const context = detectProject(options.root, options.tsconfig);
+      const scanResult = scanAllApps(
+        context.apps,
+        context.root,
+        options.pattern !== '**/*.controller.ts' ? options.pattern : undefined,
+        options.format,
+      );
+
+      for (const err of scanResult.errors) {
+        log('error', `${err.file}: ${err.message}`);
+      }
+
+      if (scanResult.controllers.length === 0) {
+        log('warn', 'No controllers found matching the pattern.');
+        process.exit(CliExitCode.Ok);
+        return;
+      }
+
+      const issues = lintControllers(scanResult.controllers, options.format);
+
+      if (issues.length === 0) {
+        log('success', 'No documentation quality issues found.');
+        process.exit(CliExitCode.Ok);
+        return;
+      }
+
+      const grouped = new Map<string, typeof issues>();
+      for (const issue of issues) {
+        const key = `${issue.controllerClass}::${issue.method}`;
+        const existing = grouped.get(key);
+        if (existing) existing.push(issue);
+        else grouped.set(key, [issue]);
+      }
+
+      for (const groupIssues of grouped.values()) {
+        log('error', groupIssues[0].route);
+        for (const issue of groupIssues) {
+          log('info', `  ${issue.message}`);
+        }
+      }
+
+      process.stderr.write(`\n${pc.red(`✖ ${issues.length} issue(s) found.`)}\n\n`);
+      process.exit(CliExitCode.PartialError);
 
     } catch (err) {
       if (err instanceof CliError) {

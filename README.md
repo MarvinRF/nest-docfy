@@ -29,6 +29,7 @@ Keep your NestJS controllers clean. Swagger documentation lives in a dedicated c
   - [Idempotency and --force](#idempotency-and---force)
 - [CLI — check](#cli--check)
 - [CLI — coverage](#cli--coverage)
+- [CLI — lint](#cli--lint)
 - [API reference](#api-reference)
   - [DocfyModule.forRoot()](#docfymoduleforrootoptions)
   - [@WithDocs()](#withdocs)
@@ -354,6 +355,63 @@ Or as an npm script:
 {
   "scripts": {
     "docs:coverage": "nestjs-docfy coverage --min 95"
+  }
+}
+```
+
+## CLI — lint
+
+Checks documentation **quality**, not just presence — catches incomplete `ApiOperation`, `ApiResponse`, and `ApiBody` decorators that `check` and `coverage` wouldn't flag (the method is documented, just incompletely).
+
+```bash
+npx nestjs-docfy lint [options]
+```
+
+| Option              | Default              | Description                                |
+| ------------------- | -------------------- | ------------------------------------------ |
+| `--root <path>`     | `.`                  | Project root directory                     |
+| `--tsconfig <path>` | auto-detected        | Path to `tsconfig.json`                    |
+| `--pattern <glob>`  | `**/*.controller.ts` | Glob pattern to find controllers           |
+| `--format <format>` | `ts`                 | Docs file format to look for: `ts` or `js` |
+| `--quiet`           | `false`              | Suppress all output except errors          |
+
+**What it checks**, for every method already present in a docs file:
+
+- `ApiOperation` missing a `summary`
+- Endpoints with a `@Body()` parameter missing a `400` `ApiResponse`
+- Endpoints with a `@Body()` parameter missing an `ApiBody` `description`
+
+Controllers without a companion docs file, or methods not yet documented at all, are left to `check` — `lint` only judges the quality of what's already there.
+
+**Example output:**
+
+```text
+✖ POST /users
+  Missing 400 response
+
+✖ GET /users
+  Missing operation summary
+
+✖ PATCH /users/:id
+  Missing request body description
+
+✖ 3 issue(s) found.
+```
+
+Exits with code `1` if any issue is found — designed for CI pipelines, same as `check`.
+
+```yaml
+# GitHub Actions example
+- name: Lint documentation quality
+  run: npx nestjs-docfy lint
+```
+
+Or as an npm script:
+
+```json
+{
+  "scripts": {
+    "docs:lint": "nestjs-docfy lint"
   }
 }
 ```
