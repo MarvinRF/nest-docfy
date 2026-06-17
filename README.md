@@ -34,9 +34,11 @@ Keep your NestJS controllers clean. Swagger documentation lives in a dedicated c
   - [DocfyModule.forRoot()](#docfymoduleforrootoptions)
   - [@WithDocs()](#withdocs)
   - [docs()](#docscontrollerclass-config)
+  - [attachTagGroups()](#attachtaggroupsdocument)
 - [Interface-typed DTOs](#interface-typed-dtos)
 - [class-validator inference](#class-validator-inference)
 - [@HttpCode() support](#httpcode-support)
+- [Tag groups (x-tagGroups)](#tag-groups-x-taggroups)
 - [File naming convention](#file-naming-convention)
 - [Testing](#testing)
 - [How it works](#how-it-works)
@@ -464,7 +466,15 @@ docs(UsersController, {
 
 **`config.methods`** — `Partial<Record<keyof T, MethodDecorator[]>>` — decorator arrays per method name, applied in order.
 
+**`config.group`** — `string` — logical group name for ReDoc's `x-tagGroups` extension. See [Tag groups](#tag-groups-x-taggroups).
+
+**`config.tags`** — `string[]` — tag names associated with `group`. Should match what you pass to `ApiTags()`.
+
 If a method key does not exist on the controller at runtime, a warning is logged and that entry is skipped — the rest of the docs file still applies.
+
+### `attachTagGroups(document)`
+
+Adds the `x-tagGroups` extension to a Swagger document, built from groups registered via `docs({ group, tags })`. Call after `SwaggerModule.createDocument()` and before `SwaggerModule.setup()`. Returns the document unchanged if no groups were registered. See [Tag groups](#tag-groups-x-taggroups) for a full example.
 
 ## Interface-typed DTOs
 
@@ -560,6 +570,53 @@ logout: [
 ```
 
 Without `@HttpCode()`, the default codes apply: `201` for `@Post`, `200` for all other HTTP verbs.
+
+## Tag groups (x-tagGroups)
+
+Pass `group` and `tags` to `docs()` to organize controllers under logical sections in tools that support the `x-tagGroups` OpenAPI extension — most notably [ReDoc](https://github.com/Redocly/redoc).
+
+```ts
+// users.controller.docs.ts
+docs(UsersController, {
+  classDecorators: [ApiTags('users')],
+  group: 'Administration',
+  tags: ['users'],
+});
+
+// roles.controller.docs.ts
+docs(RolesController, {
+  classDecorators: [ApiTags('roles')],
+  group: 'Administration',
+  tags: ['roles'],
+});
+```
+
+`tags` should match what you already pass to `ApiTags()` — `nestjs-docfy` does not call `ApiTags` for you, it only builds the `x-tagGroups` mapping from what you declare.
+
+To actually attach the groups to the generated document, call `attachTagGroups()` after `SwaggerModule.createDocument()`:
+
+```ts
+// main.ts
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { attachTagGroups } from 'nestjs-docfy';
+
+const config = new DocumentBuilder().setTitle('My API').build();
+const document = SwaggerModule.createDocument(app, config);
+
+SwaggerModule.setup('api', app, attachTagGroups(document));
+```
+
+Generated extension:
+
+```yaml
+x-tagGroups:
+  - name: Administration
+    tags:
+      - users
+      - roles
+```
+
+Multiple `docs()` calls can contribute to the same group — tags are merged and deduplicated. `attachTagGroups()` is a no-op (returns the document unchanged) when no controller declares a `group`.
 
 ## File naming convention
 

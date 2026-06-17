@@ -7,9 +7,11 @@
  * beforeEach(() => resetDocfyRegistry());
  */
 import { DocfyRegistry } from './registry';
+import { TagGroupRegistry } from './tag-group-registry';
 
 export { DocfyRegistry };
 
 export function resetDocfyRegistry(): void {
   DocfyRegistry._reset();
+  TagGroupRegistry._reset();
 }

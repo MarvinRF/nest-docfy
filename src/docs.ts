@@ -1,3 +1,5 @@
+import { TagGroupRegistry } from './tag-group-registry';
+
 type Constructor<T = any> = new (...args: any[]) => T;
 
 export interface DocsConfig<T = any> {
@@ -5,6 +7,19 @@ export interface DocsConfig<T = any> {
   classDecorators?: ClassDecorator[];
   /** Method-level decorators keyed by method name. */
   methods?: Partial<Record<keyof T, MethodDecorator[]>>;
+  /**
+   * Logical group name for ReDoc's `x-tagGroups` extension. Purely
+   * organizational — has no effect on per-operation Swagger tags.
+   * Combine with `tags`, and call `attachTagGroups()` on the document
+   * returned by `SwaggerModule.createDocument()`.
+   */
+  group?: string;
+  /**
+   * Tag names to associate with `group`. These should match the tags you
+   * already apply via `ApiTags()` in `classDecorators` — nestjs-docfy does
+   * not call `ApiTags` for you, it only builds the `x-tagGroups` mapping.
+   */
+  tags?: string[];
 }
 
 /**
@@ -28,6 +43,10 @@ export function docs<T>(controllerClass: Constructor<T>, config: DocsConfig<T>):
     for (const decorator of config.classDecorators) {
       decorator(controllerClass);
     }
+  }
+
+  if (config.group) {
+    TagGroupRegistry.register(config.group, config.tags ?? []);
   }
 
   if (!config.methods) return;

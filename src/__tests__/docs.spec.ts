@@ -1,5 +1,6 @@
 import 'reflect-metadata';
 import { docs } from '../docs';
+import { TagGroupRegistry } from '../tag-group-registry';
 
 const OPERATION_KEY = 'swagger/apiOperation';
 const RESPONSE_KEY = 'swagger/apiResponse';
@@ -37,6 +38,33 @@ function freshController() {
 }
 
 describe('docs()', () => {
+  afterEach(() => TagGroupRegistry._reset());
+
+  it('registers a tag group when group and tags are provided', () => {
+    const Ctrl = freshController();
+    docs(Ctrl, { group: 'Administration', tags: ['users'] });
+
+    expect(TagGroupRegistry.getAll()).toEqual([
+      { name: 'Administration', tags: ['users'] },
+    ]);
+  });
+
+  it('does not register a tag group when group is omitted', () => {
+    const Ctrl = freshController();
+    docs(Ctrl, { tags: ['users'] });
+
+    expect(TagGroupRegistry.getAll()).toEqual([]);
+  });
+
+  it('registers a tag group with no tags when tags is omitted', () => {
+    const Ctrl = freshController();
+    docs(Ctrl, { group: 'Administration' });
+
+    expect(TagGroupRegistry.getAll()).toEqual([
+      { name: 'Administration', tags: [] },
+    ]);
+  });
+
   it('applies class decorators to the constructor', () => {
     const Ctrl = freshController();
     docs(Ctrl, { classDecorators: [makeApiTags('my-tag')] });
