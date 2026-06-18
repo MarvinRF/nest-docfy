@@ -85,8 +85,11 @@ export class DocfyModule {
 function isMissingDocsFile(err: unknown, docsPath: string): boolean {
   if (!(err instanceof Error)) return false;
   if (!('code' in err) || (err as NodeJS.ErrnoException).code !== 'MODULE_NOT_FOUND') return false;
-  // Node's error message for a missing top-level module includes its path.
-  // If the missing path is the docs file itself, the message contains docsPath.
-  // If it's a dependency inside the docs file, the message will contain a different path.
-  return err.message.includes(docsPath);
+  // Node's MODULE_NOT_FOUND message is "Cannot find module 'X'\nRequire stack:\n- ...".
+  // Only the first line names the actual missing module — docsPath legitimately
+  // also appears further down in the "Require stack" list whenever a *dependency*
+  // inside an existing docs file is missing (docsPath required it, so it's in the
+  // chain), which would otherwise false-positive as "the docs file doesn't exist".
+  const firstLine = err.message.split('\n', 1)[0];
+  return firstLine.includes(docsPath);
 }

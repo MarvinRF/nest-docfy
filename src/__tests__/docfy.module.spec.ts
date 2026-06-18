@@ -103,6 +103,29 @@ describe('DocfyModule._loadAllDocs()', () => {
         DocfyModule._loadAllDocs({}, mockRequire, cache),
       ).toThrow("Cannot find module '/app/some-missing-dep'");
     });
+
+    it('rethrows a missing dependency even when docsPath also appears in the error\'s "Require stack" trailer', () => {
+      // Real Node MODULE_NOT_FOUND errors list every file in the require
+      // chain under "Require stack:" — including docsPath itself, since it's
+      // the one that required the (actually) missing dependency. A naive
+      // "does docsPath appear anywhere in the message" check would
+      // misclassify this as "the docs file doesn't exist", which it does.
+      class RealStackShapeController {}
+      DocfyRegistry.add(RealStackShapeController);
+      const docsPath = '/app/real.controller.docs.js';
+      const cache = makeCache('/app/real.controller.js', RealStackShapeController);
+
+      mockRequire.mockImplementation(() => {
+        throw Object.assign(
+          new Error(`Cannot find module './sibling'\nRequire stack:\n- ${docsPath}\n- /app/main.js`),
+          { code: 'MODULE_NOT_FOUND' },
+        );
+      });
+
+      expect(() => DocfyModule._loadAllDocs({}, mockRequire, cache)).toThrow(
+        "Cannot find module './sibling'",
+      );
+    });
   });
 
   it('rethrows unexpected errors (e.g. syntax error in docs file)', () => {
