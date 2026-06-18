@@ -629,6 +629,16 @@ Discovery is automatic. `DocfyModule` locates each controller's source file via 
 
 > **Barrel re-exports**: if your controller is also exported from an `index.ts` barrel, make sure the class is exported directly from its own module file. `nestjs-docfy` prefers `.controller.ts` over barrel files.
 
+### Not supported: NestJS CLI's `webpack: true` build mode
+
+If your `nest-cli.json` has `"webpack": true` under `compilerOptions` — the documented default for monorepos with multiple apps — `nestjs-docfy` **will not work**, and there is no configuration that makes it work. This is architectural, not a bug to be patched around:
+
+- Webpack inlines every module into one bundle file and never populates Node's `require.cache` with an entry per original source file, which is what the discovery mechanism above depends on. You'll see `Could not locate source file for X` for every `@WithDocs()` controller.
+- Even if that lookup is worked around (e.g. by recovering the original path from the bundle's source map, sidestepping `require.cache` entirely), there's a second, unavoidable wall: a docs file required from outside the bundle creates a structurally different class object than the one the running app actually uses internally. Decorating that fresh copy has no effect on the document `SwaggerModule.createDocument()` actually serves — silently, with no error. This path-recovery layer was built and tested before discovering this; it isn't shipped, because "looks like it loaded, does nothing" is worse than the current loud, accurate warning.
+- The only way around this would be for the controller's own file to import its `.docs.ts` companion (forcing webpack to bundle them together) — which defeats the entire point of the convention: zero coupling between a controller and its documentation.
+
+**If you need `nestjs-docfy`, disable webpack bundling**: remove `"webpack": true` (or set it to `false`) in `nest-cli.json`. Under `nest build`'s default `tsc`-based compilation, every source file — including each `*.controller.docs.ts` — gets compiled to its own `.js` file in `dist/`, so `require.cache` naturally has one entry per file and discovery works exactly as documented above, no special configuration needed.
+
 ## Testing
 
 Reset the controller registry between test suites to avoid cross-contamination:
