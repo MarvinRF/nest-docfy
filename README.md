@@ -418,6 +418,45 @@ Or as an npm script:
 }
 ```
 
+## CLI — patch-spec
+
+Patches an **already-built** OpenAPI document with every controller's companion docs file, entirely via static analysis (`ts-morph`) — no `require()` of any docs file, no decorators applied to any class, no dependency on a live class reference matching the one the running app actually uses.
+
+This is the workaround for the one thing `DocfyModule`'s runtime pipeline structurally cannot do: work under NestJS CLI's `webpack: true` build mode (see "Not supported" under [File naming convention](#file-naming-convention) for why). `patch-spec` sidesteps that entirely by matching on **path + HTTP method**, computed the same way `check`/`coverage`/`lint` already do, instead of needing the live controller class.
+
+```bash
+npx nestjs-docfy patch-spec --spec <path-or-url> [options]
+```
+
+| Option | Default | Description |
+| --- | --- | --- |
+| `--spec <path\|url>` | *(required)* | A local `openapi.json`, or a URL (e.g. a running app's `/api-json`) |
+| `--out <path>` | stdout | Where to write the patched document |
+| `--root <path>` | `.` | Project root directory |
+| `--tsconfig <path>` | auto-detected | Path to `tsconfig.json` |
+| `--pattern <glob>` | `**/*.controller.ts` | Glob pattern to find controllers |
+| `--format <format>` | `ts` | Docs file format to look for: `ts` or `js` |
+| `--quiet` | `false` | Suppress all output except errors |
+
+```bash
+# Patch a running app's served document
+npx nestjs-docfy patch-spec --spec http://localhost:3000/api-json --out openapi.json
+
+# Patch a file already written to disk
+npx nestjs-docfy patch-spec --spec dist/openapi.json --out dist/openapi.json
+```
+
+**What gets merged**, matched by `path` + HTTP method against the base document:
+
+- `ApiTags` → unioned into `tags` (never drops tags the base document already had)
+- `ApiOperation({ summary, description, deprecated })` → overwrites those fields
+- `ApiResponse({ status, description, schema })` → merged per status code (other status codes untouched); when no `schema`/`type` is given, falls back to the method's own resolved return type — same DTO/class-validator/interface inference `generate` already does
+- `ApiBody({ schema })` → sets `requestBody`, with the same return-type-style fallback to the `@Body()` parameter's resolved type
+- `ApiBearerAuth()` → appended to `security`
+- `ApiParam` / `ApiQuery` / `ApiHeader` → appended to `parameters`, deduplicated by name + location
+
+**What this does *not* do** (yet — this command is intentionally scoped, not a full reimplementation of `@nestjs/swagger`'s decorator semantics): enums, `oneOf`/`anyOf`, examples, links, callbacks, and any decorator argument that isn't a literal (a variable, a function call, a spread) are left alone rather than guessed at — better to leave a field as the base document already had it than patch in something wrong. Routes a docs file documents that don't exist in `--spec` are reported as warnings, not silently dropped or errored on.
+
 ## API reference
 
 ### `DocfyModule.forRoot(options?)`

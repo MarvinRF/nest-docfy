@@ -1,7 +1,8 @@
 #!/usr/bin/env node
+import * as fs from 'fs';
 import { Command } from 'commander';
 import pc from 'picocolors';
-import { parseAndValidateOptions, type CliOptions } from './parse-args';
+import { parseAndValidateOptions, resolveAndValidate, type CliOptions } from './parse-args';
 import { setQuiet, log, header, summary } from './logger';
 import { CliError, CliExitCode } from './errors';
 import { detectProject } from './detect-project';
@@ -11,6 +12,8 @@ import { watchProject } from './watch';
 import { checkControllers } from './check';
 import { computeCoverage } from './coverage';
 import { lintControllers } from './lint';
+import { computePatchedDocument } from './patch-spec';
+import type { OpenApiDocument } from './merge-spec-patch';
 
 const program = new Command();
 
@@ -420,6 +423,129 @@ program
       process.stderr.write(`\n${pc.red(`✖ ${issues.length} issue(s) found.`)}\n\n`);
       process.exit(CliExitCode.PartialError);
 
+    } catch (err) {
+      if (err instanceof CliError) {
+        process.stderr.write(`\n${pc.red('✖ Error:')} ${err.message}\n\n`);
+        process.exit(err.exitCode);
+      }
+      if (err instanceof Error) {
+        process.stderr.write(`\n${pc.red('✖ Error:')} ${err.message}\n\n`);
+      } else {
+        process.stderr.write(`\n${pc.red('✖ Unknown error')}\n\n`);
+      }
+      process.exit(CliExitCode.Fatal);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// patch-spec command
+// ---------------------------------------------------------------------------
+
+async function readSpecSource(source: string, root: string): Promise<OpenApiDocument> {
+  let text: string;
+  if (/^https?:\/\//.test(source)) {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const fetchFn = (globalThis as any).fetch as undefined | ((url: string) => Promise<{ ok: boolean; status: number; text(): Promise<string> }>);
+    if (!fetchFn) {
+      throw new CliError('Fetching --spec from a URL requires a Node version with global fetch (Node 18+).', CliExitCode.Fatal);
+    }
+    const res = await fetchFn(source);
+    if (!res.ok) {
+      throw new CliError(`Failed to fetch --spec from ${source}: HTTP ${res.status}`, CliExitCode.Fatal);
+    }
+    text = await res.text();
+  } else {
+    const resolved = resolveAndValidate(source, root, '--spec');
+    try {
+      text = fs.readFileSync(resolved, 'utf8');
+    } catch (err) {
+      throw new CliError(
+        `Could not read --spec file at ${resolved}: ${err instanceof Error ? err.message : String(err)}`,
+        CliExitCode.Fatal,
+      );
+    }
+  }
+
+  try {
+    return JSON.parse(text) as OpenApiDocument;
+  } catch (err) {
+    throw new CliError(
+      `--spec did not contain valid JSON: ${err instanceof Error ? err.message : String(err)}`,
+      CliExitCode.Fatal,
+    );
+  }
+}
+
+program
+  .command('patch-spec')
+  .description(
+    'Patch an already-built OpenAPI document with every controller\'s companion docs file, ' +
+      'using static analysis only — no runtime require(), no decorators applied to any class. ' +
+      'Works under any build mode, including NestJS CLI\'s "webpack: true" (see README).',
+  )
+  .requiredOption('--spec <path-or-url>', 'Path to a local openapi.json, or a URL (e.g. http://localhost:3000/api-json)')
+  .option('--out <path>', 'Where to write the patched document (default: stdout)')
+  .option('--root <path>', 'Project root directory', '.')
+  .option('--tsconfig <path>', 'Path to tsconfig.json (auto-detected if omitted)')
+  .option('--pattern <glob>', 'Glob pattern to find controllers', '**/*.controller.ts')
+  .option('--format <format>', 'Docs file format to look for: ts or js', 'ts')
+  .option('--quiet', 'Suppress all output except errors', false)
+  .action(async (rawOpts: Record<string, unknown>) => {
+    try {
+      const options = parseAndValidateOptions({
+        ...rawOpts,
+        force: false,
+        dryRun: false,
+        watch: false,
+      } as Parameters<typeof parseAndValidateOptions>[0]);
+      setQuiet(options.quiet);
+
+      header('nestjs-docfy patch-spec');
+      log('info', `Root: ${options.root}`);
+      log('info', `Spec: ${String(rawOpts.spec)}`);
+
+      const document = await readSpecSource(String(rawOpts.spec), options.root);
+
+      const context = detectProject(options.root, options.tsconfig);
+      const scanResult = scanAllApps(
+        context.apps,
+        context.root,
+        options.pattern !== '**/*.controller.ts' ? options.pattern : undefined,
+        options.format,
+      );
+
+      for (const err of scanResult.errors) {
+        log('error', `${err.file}: ${err.message}`);
+      }
+
+      const result = computePatchedDocument(document, scanResult.controllers, options.format, (absPath) => {
+        try {
+          return fs.readFileSync(absPath, 'utf8');
+        } catch {
+          return null;
+        }
+      });
+
+      log('success', `Patched ${result.patchedOperationCount} operation(s).`);
+      if (result.controllersWithoutDocs.length > 0) {
+        log('info', `No docs file: ${result.controllersWithoutDocs.join(', ')}`);
+      }
+      if (result.unparseableDocsFiles.length > 0) {
+        log('warn', `Could not parse: ${result.unparseableDocsFiles.join(', ')}`);
+      }
+      if (result.unmatchedRoutes.length > 0) {
+        log('warn', `Documented but not present in --spec: ${result.unmatchedRoutes.join(', ')}`);
+      }
+
+      const output = JSON.stringify(result.document, null, 2);
+      if (options.out) {
+        fs.writeFileSync(options.out, output);
+        log('success', `Written to ${options.out}`);
+      } else {
+        process.stdout.write(`${output}\n`);
+      }
+
+      process.exit(CliExitCode.Ok);
     } catch (err) {
       if (err instanceof CliError) {
         process.stderr.write(`\n${pc.red('✖ Error:')} ${err.message}\n\n`);
