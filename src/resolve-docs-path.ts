@@ -62,7 +62,18 @@ function findFileInCache(target: Function, cache: CacheSnapshot): string | null 
   for (const [filename, mod] of Object.entries(cache)) {
     if (!mod?.exports) continue;
     for (const key of Object.keys(mod.exports)) {
-      if (mod.exports[key] === target) {
+      // Some third-party modules (e.g. express's `request.js`) export an
+      // object with enumerable getters that throw outside their expected
+      // context (`req.query` reads `this.app`, undefined here). Reading
+      // those would crash this require.cache scan, so any getter that
+      // throws is treated as a non-match instead of propagating.
+      let value: unknown;
+      try {
+        value = mod.exports[key];
+      } catch {
+        continue;
+      }
+      if (value === target) {
         candidates.push(filename);
         break;
       }
