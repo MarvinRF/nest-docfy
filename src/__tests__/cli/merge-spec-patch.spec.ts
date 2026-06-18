@@ -21,6 +21,16 @@ describe('mergeOperation()', () => {
     expect(result.tags).toEqual(['a', 'b', 'c']);
   });
 
+  it('treats tags differing only by case as the same tag, keeping the base document\'s casing', () => {
+    // Real-world case this reproduces: @nestjs/swagger auto-tags a controller
+    // as "Auth" (from the class name) while a docs file's ApiTags('auth')
+    // uses lowercase — same logical group, would otherwise render as two
+    // separate sidebar sections in a UI that groups by tag.
+    const existing: OpenApiOperation = { tags: ['Auth'] };
+    const result = mergeOperation(existing, { tags: ['auth'] });
+    expect(result.tags).toEqual(['Auth']);
+  });
+
   it('merges responses per status code, not wholesale', () => {
     const existing: OpenApiOperation = { responses: { '200': { description: 'OK' }, '404': { description: 'gone' } } };
     const result = mergeOperation(existing, { responses: { '200': { description: 'Found' } } });

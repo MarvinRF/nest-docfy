@@ -17,10 +17,24 @@ export interface OpenApiOperation {
   [key: string]: unknown;
 }
 
+/**
+ * Unions tags case-insensitively, keeping whichever casing was already in
+ * the base document's `tags` so the merge never produces what looks like
+ * two different groups in a UI that groups operations by tag (e.g.
+ * @nestjs/swagger's auto-generated "Auth" colliding with an `ApiTags('auth')`
+ * in a docs file — same logical tag, different casing).
+ */
 function mergeTags(existing: string[] | undefined, incoming: string[] | undefined): string[] | undefined {
   if (!incoming) return existing;
-  const set = new Set([...(existing ?? []), ...incoming]);
-  return [...set];
+  const result = [...(existing ?? [])];
+  const seenLower = new Set(result.map((t) => t.toLowerCase()));
+  for (const tag of incoming) {
+    if (!seenLower.has(tag.toLowerCase())) {
+      result.push(tag);
+      seenLower.add(tag.toLowerCase());
+    }
+  }
+  return result;
 }
 
 function mergeSecurity(
