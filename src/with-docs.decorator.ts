@@ -22,8 +22,15 @@ export const DOCFY_MARKER = 'docfy:with_docs';
  * export class UsersController { ... }
  */
 export function WithDocs(): ClassDecorator {
+  // Captured here, not inside the returned decorator, so the stack's frame
+  // right under this function's own is the line `@WithDocs()` is written on
+  // (the controller's own file) — used by resolve-source-from-stack.ts as a
+  // fallback when require.cache has no per-file entry for the controller
+  // (e.g. the app is bundled by webpack; see DocfyModule's README section).
+  const callSiteStack = new Error().stack;
+
   return (target: Function) => {
     SetMetadata(DOCFY_MARKER, true)(target);
-    DocfyRegistry.add(target);
+    DocfyRegistry.add(target, callSiteStack);
   };
 }

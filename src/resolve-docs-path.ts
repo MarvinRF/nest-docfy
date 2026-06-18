@@ -1,4 +1,5 @@
 import * as path from 'path';
+import { parseCallSite, resolveOriginalPath } from './resolve-source-from-stack';
 
 type CacheSnapshot = Record<string, { exports: Record<string, unknown> } | undefined>;
 
@@ -14,12 +15,23 @@ type CacheSnapshot = Record<string, { exports: Record<string, unknown> } | undef
  * - the class is only found via a barrel re-export (index.ts) rather than its own file
  *
  * @param readCache Injected for testing; defaults to () => require.cache.
+ * @param callSiteStack The `Error().stack` captured by `@WithDocs()` at the
+ * controller's own decoration site. Used as a fallback when the controller's
+ * file has no require.cache entry — which is always true when the app is
+ * bundled (NestJS CLI's `webpack: true` build mode, the documented default
+ * for monorepos): bundlers inline every module into one file and never
+ * populate require.cache per original source file, so the cache-based
+ * lookup below can never find anything to return. In that case we resolve
+ * the bundle position from the stack trace back to the original file via
+ * that bundle's source map (emitted by default by the webpack build).
  */
 export function resolveDocsPath(
   controllerClass: Function,
   readCache: () => CacheSnapshot = () => require.cache as unknown as CacheSnapshot,
+  callSiteStack?: string,
 ): string | null {
-  const controllerFile = findFileInCache(controllerClass, readCache());
+  const controllerFile =
+    findFileInCache(controllerClass, readCache()) ?? resolveFromCallSite(callSiteStack);
   if (!controllerFile) return null;
 
   const ext = path.extname(controllerFile); // .ts or .js
@@ -29,6 +41,12 @@ export function resolveDocsPath(
   if (!base.endsWith('.controller')) return null;
 
   return `${base}.docs${ext}`;
+}
+
+function resolveFromCallSite(callSiteStack: string | undefined): string | null {
+  const loc = parseCallSite(callSiteStack);
+  if (!loc) return null;
+  return resolveOriginalPath(loc);
 }
 
 /**

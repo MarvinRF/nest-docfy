@@ -42,7 +42,8 @@ export class DocfyModule {
     const { strict = false } = options;
 
     for (const controllerClass of DocfyRegistry.getAll()) {
-      const docsPath = resolveDocsPath(controllerClass, cacheReader);
+      const callSiteStack = DocfyRegistry.getCallSite(controllerClass);
+      const docsPath = resolveDocsPath(controllerClass, cacheReader, callSiteStack);
 
       if (!docsPath) {
         const message =
