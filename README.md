@@ -30,11 +30,13 @@ Keep your NestJS controllers clean. Swagger documentation lives in a dedicated c
 - [CLI — check](#cli--check)
 - [CLI — coverage](#cli--coverage)
 - [CLI — lint](#cli--lint)
+- [CLI — patch-spec](#cli--patch-spec)
 - [API reference](#api-reference)
   - [DocfyModule.forRoot()](#docfymoduleforrootoptions)
   - [@WithDocs()](#withdocs)
   - [docs()](#docscontrollerclass-config)
   - [attachTagGroups()](#attachtaggroupsdocument)
+  - [DocfyUiModule.setup()](#docfyuimodulesetupmountpath-app-options)
 - [Interface-typed DTOs](#interface-typed-dtos)
 - [class-validator inference](#class-validator-inference)
 - [@HttpCode() support](#httpcode-support)
@@ -514,6 +516,47 @@ If a method key does not exist on the controller at runtime, a warning is logged
 ### `attachTagGroups(document)`
 
 Adds the `x-tagGroups` extension to a Swagger document, built from groups registered via `docs({ group, tags })`. Call after `SwaggerModule.createDocument()` and before `SwaggerModule.setup()`. Returns the document unchanged if no groups were registered. See [Tag groups](#tag-groups-x-taggroups) for a full example.
+
+### `DocfyUiModule.setup(mountPath, app, options?)`
+
+Serves [`docfy-ui`](https://www.npmjs.com/package/docfy-ui) — the AI-first documentation UI companion to this package — at `mountPath`, the same role `SwaggerModule.setup()` + `swagger-ui-express` play for raw Swagger UI. Built on Express's static-file middleware directly, so it expects an Express-based Nest app (the default `@nestjs/platform-express` adapter) — Fastify isn't supported yet.
+
+```ts
+import { NestFactory } from '@nestjs/core';
+import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
+import { DocfyUiModule } from 'nestjs-docfy';
+
+const app = await NestFactory.create(AppModule);
+
+DocfyUiModule.setup('/docs', app); // before SwaggerModule.setup — see staticSpecPath below
+
+const document = SwaggerModule.createDocument(app, new DocumentBuilder().build());
+SwaggerModule.setup('api', app, document); // exposes /api-json, which docfy-ui fetches by default
+
+await app.listen(3000);
+```
+
+Visit `/docs` — no further configuration needed, since `docfy-ui` fetches `/api-json` same-origin by default.
+
+| Option | Type | Default | Description |
+| --- | --- | --- | --- |
+| `staticSpecPath` | `string` | — | Path to a pre-built OpenAPI JSON file, served at `/api-json` *instead of* the app's live one. |
+
+**`staticSpecPath` — required if your app builds with `"webpack": true`.** `DocfyModule`'s runtime metadata pipeline cannot apply docs files there (see [Not supported: webpack: true](#not-supported-nestjs-clis-webpack-true-build-mode)), so the live `/api-json` will be missing everything docs files would otherwise add. Generate a patched document ahead of time —
+
+```bash
+npx nestjs-docfy patch-spec --spec http://localhost:3000/api-json --out openapi.patched.json
+```
+
+— and serve that instead:
+
+```ts
+DocfyUiModule.setup('/docs', app, { staticSpecPath: './openapi.patched.json' });
+```
+
+Call this **before** `SwaggerModule.setup()`: Express resolves routes in registration order, so the static, patched document takes precedence over the live one for any request to `/api-json`.
+
+> **Caveat**: `docfy-ui` renders with React Router's `BrowserRouter` and no configurable `basename` yet, so deep client-side routes (e.g. reloading an endpoint's detail page directly) only resolve correctly when `mountPath` is `/` — the application's root. Mounting elsewhere (e.g. `/docs`) still serves the UI and its initial load works fine; in-app navigation to a specific endpoint and then reloading that URL does not yet work at a non-root mount path.
 
 ## Interface-typed DTOs
 
