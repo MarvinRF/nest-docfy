@@ -1,7 +1,7 @@
 import { deriveDocsFilePath } from './scan-controllers';
 import { extractDocsConfig } from './extract-docs-config';
-import { buildOpenApiPatch, SpecPatch } from './build-openapi-patch';
-import { mergeSpecPatch, OpenApiDocument } from './merge-spec-patch';
+import { buildOpenApiPatch, SpecPatch, OperationPatch } from './build-openapi-patch';
+import { mergeSpecPatch, mergeOperation, OpenApiDocument, OpenApiOperation } from './merge-spec-patch';
 import type { ControllerInfo } from './extract-methods';
 
 export interface PatchSpecResult {
@@ -16,10 +16,28 @@ export interface PatchSpecResult {
   unparseableDocsFiles: string[];
 }
 
+/**
+ * Merges two SpecPatch maps, deep-merging at the operation level (not a
+ * shallow per-method overwrite) — two different controllers can
+ * legitimately produce a patch for the exact same path + method (e.g. a
+ * gateway and the microservice it proxies to, both documenting the same
+ * logical route under their own controller). A shallow overwrite would let
+ * whichever controller is scanned second silently wipe out fields the
+ * first one set, rather than only adding to them. Reuses mergeOperation —
+ * the same additive-collections/overwrite-scalars semantics already used
+ * when merging a patch into the base document.
+ */
 function mergePatches(a: SpecPatch, b: SpecPatch): SpecPatch {
   const result: SpecPatch = { ...a };
   for (const [route, methods] of Object.entries(b)) {
-    result[route] = { ...result[route], ...methods };
+    const merged: Record<string, OperationPatch> = { ...result[route] };
+    for (const [httpMethod, opPatch] of Object.entries(methods)) {
+      const existing = merged[httpMethod];
+      merged[httpMethod] = existing
+        ? (mergeOperation(existing as OpenApiOperation, opPatch) as OperationPatch)
+        : opPatch;
+    }
+    result[route] = merged;
   }
   return result;
 }

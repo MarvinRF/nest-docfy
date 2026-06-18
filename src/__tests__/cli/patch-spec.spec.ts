@@ -96,6 +96,47 @@ describe('computePatchedDocument()', () => {
     expect(result.document.paths!['/orders'].get.tags).toEqual(['orders']);
   });
 
+  it('deep-merges two different controllers patching the exact same path+method, instead of letting the second wipe the first', () => {
+    // Real-world shape this reproduces: a gateway controller and the
+    // microservice controller it proxies to, both legitimately mapping to
+    // the same logical route (e.g. POST /auth/register), each with their
+    // own companion docs file. The gateway's is richer (full response
+    // schema); the microservice's only sets a bare 201 with no schema.
+    // Whichever is scanned second must not erase what the first set.
+    const richController = makeCtrl({ className: 'GatewayAuthController' });
+    const sparseController = makeCtrl({ className: 'MicroserviceAuthController' });
+
+    const richDocs = `
+      docs(GatewayAuthController, {
+        classDecorators: [],
+        methods: {
+          findAll: [ApiResponse({ status: 200, schema: { type: 'object', properties: { ok: { type: 'boolean' } } } })],
+        },
+      });
+    `;
+    const sparseDocs = `
+      docs(MicroserviceAuthController, {
+        classDecorators: [],
+        methods: { findAll: [ApiResponse({ status: 200 })] },
+      });
+    `;
+
+    let call = 0;
+    const result = computePatchedDocument(
+      BASE_DOCUMENT,
+      [richController, sparseController],
+      'ts',
+      () => {
+        call += 1;
+        return call === 1 ? richDocs : sparseDocs;
+      },
+    );
+
+    expect(result.document.paths!['/users'].get.responses!['200'].content).toEqual({
+      'application/json': { schema: { type: 'object', properties: { ok: { type: 'boolean' } } } },
+    });
+  });
+
   it('surfaces unmatched routes from the underlying merge (e.g. a documented method with no live route)', () => {
     const docFileWithGhost = `
       docs(UsersController, {
