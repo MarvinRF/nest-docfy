@@ -41,13 +41,12 @@ export interface DocfyUiSetupOptions {
  * the same role `SwaggerModule.setup()` + `swagger-ui-express` play for
  * raw Swagger UI, but for `docfy-ui`.
  *
- * Caveat: `docfy-ui` currently renders with React Router's `BrowserRouter`
- * and no configurable `basename`, so deep client-side routes (e.g.
- * reloading `/users/findAllUsers` directly) only resolve correctly when
- * `mountPath` is `/` — the application's root. Mounting elsewhere (e.g.
- * `/docs`) still serves the UI and its initial load works, but in-app
- * navigation/reload at a non-root path is not yet supported by `docfy-ui`
- * itself.
+ * Deep client-side routes (e.g. reloading `/docs/users/findAllUsers`
+ * directly) resolve correctly at any `mountPath`: this injects a `<base>`
+ * tag matching `mountPath` (so the build's relative asset URLs resolve
+ * against it instead of the current, possibly-deep, pathname) and a
+ * `window.__DOCFY_BASE_PATH__` global that `docfy-ui` reads to set
+ * `BrowserRouter`'s `basename`.
  */
 export class DocfyUiModule {
   static setup(
@@ -65,10 +64,21 @@ export class DocfyUiModule {
 
     const indexHtmlPath = require.resolve('docfy-ui/dist/index.html');
     const uiDir = path.dirname(indexHtmlPath);
+    const basePath = mountPath === '/' ? '/' : `${mountPath.replace(/\/+$/, '')}/`;
+    const indexHtml = fs
+      .readFileSync(indexHtmlPath, 'utf8')
+      .replace(
+        '<head>',
+        `<head>\n    <base href="${basePath}" />\n    <script>window.__DOCFY_BASE_PATH__ = ${JSON.stringify(basePath)};</script>`,
+      );
 
-    app.use(mountPath, express.static(uiDir));
+    // `index: false` so directory requests (e.g. `GET /docs/`) fall through
+    // to the catch-all below instead of express.static serving the
+    // un-patched index.html straight off disk.
+    app.use(mountPath, express.static(uiDir, { index: false }));
     app.use(mountPath, (_req: express.Request, res: express.Response) => {
-      res.sendFile(path.join(uiDir, 'index.html'));
+      res.setHeader('Content-Type', 'text/html');
+      res.end(indexHtml);
     });
   }
 }
