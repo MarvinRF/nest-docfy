@@ -519,7 +519,7 @@ Adds the `x-tagGroups` extension to a Swagger document, built from groups regist
 
 ### `DocfyUiModule.setup(mountPath, app, options?)`
 
-Serves [`docfy-ui`](https://www.npmjs.com/package/docfy-ui) — the AI-first documentation UI companion to this package — at `mountPath`, the same role `SwaggerModule.setup()` + `swagger-ui-express` play for raw Swagger UI. Built on Express's static-file middleware directly, so it expects an Express-based Nest app (the default `@nestjs/platform-express` adapter) — Fastify isn't supported yet.
+Serves [`docfy-ui`](https://www.npmjs.com/package/docfy-ui) — the AI-first documentation UI companion to this package — at `mountPath`, the same role `SwaggerModule.setup()` + `swagger-ui-express` play for raw Swagger UI. Works on both Express (`@nestjs/platform-express`) and Fastify (`@nestjs/platform-fastify`) apps. On Fastify, static asset serving needs the optional peer dependency [`@fastify/static`](https://www.npmjs.com/package/@fastify/static) (`npm install @fastify/static`) — the same package `@nestjs/swagger` itself relies on for Fastify Swagger UI support.
 
 ```ts
 import { NestFactory } from '@nestjs/core';
@@ -556,6 +556,8 @@ DocfyUiModule.setup('/docs', app, { staticSpecPath: './openapi.patched.json' });
 
 Call this **before** `SwaggerModule.setup()`: Express resolves routes in registration order, so the static, patched document takes precedence over the live one for any request to `/api-json`.
 
+> **Fastify caveat**: `SwaggerModule.setup()` also registers its own `/api-json` route by default. On Express, whichever route is registered first silently wins. On Fastify, registering the same exact route twice throws `FST_ERR_DUPLICATED_ROUTE` at startup instead — registration order does not save you. When using `staticSpecPath` together with Fastify, point `SwaggerModule.setup()` at a different `jsonDocumentUrl`, or pass `{ raw: false }`, so it doesn't also claim `/api-json`.
+>
 > **Caveat**: `docfy-ui` renders with React Router's `BrowserRouter` and no configurable `basename` yet, so deep client-side routes (e.g. reloading an endpoint's detail page directly) only resolve correctly when `mountPath` is `/` — the application's root. Mounting elsewhere (e.g. `/docs`) still serves the UI and its initial load works fine; in-app navigation to a specific endpoint and then reloading that URL does not yet work at a non-root mount path.
 
 ## Interface-typed DTOs

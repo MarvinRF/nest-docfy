@@ -3,19 +3,47 @@ import * as os from 'os';
 import * as path from 'path';
 import { DocfyUiModule, DocfyUiSetupTarget } from '../docfy-ui.module';
 
-function makeRecordingApp(): { app: DocfyUiSetupTarget; calls: Array<{ args: unknown[] }> } {
+type ScopedCall = { method: 'register' | 'setNotFoundHandler'; args: unknown[] };
+type ScopedRegistration = { opts: { prefix: string }; scopedCalls: ScopedCall[] };
+
+function makeRecordingApp(type: 'express' | 'fastify' = 'express') {
   const calls: Array<{ args: unknown[] }> = [];
-  return {
-    app: { use: (...args: unknown[]) => calls.push({ args }) },
-    calls,
+  const scopedRegistrations: ScopedRegistration[] = [];
+
+  const fakeInstance = {
+    register: (
+      plugin: (scoped: unknown, opts: unknown, done: () => void) => void,
+      opts: { prefix: string },
+    ) => {
+      const scopedCalls: ScopedCall[] = [];
+      const scoped = {
+        register: (...a: unknown[]) => scopedCalls.push({ method: 'register', args: a }),
+        setNotFoundHandler: (...a: unknown[]) =>
+          scopedCalls.push({ method: 'setNotFoundHandler', args: a }),
+      };
+      plugin(scoped, opts, () => {});
+      scopedRegistrations.push({ opts, scopedCalls });
+    },
   };
+
+  const httpAdapter = {
+    getType: () => type,
+    get: (...args: unknown[]) => calls.push({ args }),
+    getInstance: () => fakeInstance,
+  };
+
+  const app: DocfyUiSetupTarget = {
+    use: (...args: unknown[]) => calls.push({ args }),
+    getHttpAdapter: () => httpAdapter,
+  };
+
+  return { app, calls, scopedRegistrations };
 }
 
 function makeMockResponse() {
   const res = {
     headers: {} as Record<string, string>,
     body: undefined as string | undefined,
-    sentFile: undefined as string | undefined,
     setHeader(name: string, value: string) {
       res.headers[name] = value;
       return res;
@@ -24,15 +52,21 @@ function makeMockResponse() {
       res.body = chunk;
       return res;
     },
-    sendFile(filePath: string) {
-      res.sentFile = filePath;
+    send(chunk?: string) {
+      res.body = chunk;
+      return res;
+    },
+    type(contentType: string) {
+      res.headers['Content-Type'] = contentType;
       return res;
     },
   };
   return res;
 }
 
-describe('DocfyUiModule.setup()', () => {
+const PATCHED_INDEX_HTML = fs.readFileSync(require.resolve('docfy-ui/dist/index.html'), 'utf8');
+
+describe('DocfyUiModule.setup() — Express', () => {
   it('registers static-asset middleware and an index.html fallback at mountPath', () => {
     const { app, calls } = makeRecordingApp();
     DocfyUiModule.setup('/docs', app);
@@ -41,7 +75,7 @@ describe('DocfyUiModule.setup()', () => {
     expect(mountPathCalls.length).toBeGreaterThanOrEqual(2);
   });
 
-  it('the index.html fallback handler serves docfy-ui\'s actual published index.html', () => {
+  it("the index.html fallback handler serves docfy-ui's actual published index.html", () => {
     const { app, calls } = makeRecordingApp();
     DocfyUiModule.setup('/docs', app);
 
@@ -51,8 +85,15 @@ describe('DocfyUiModule.setup()', () => {
     const res = makeMockResponse();
     handler(undefined, res);
 
-    expect(res.sentFile).toMatch(/docfy-ui[/\\]dist[/\\]index\.html$/);
-    expect(fs.existsSync(res.sentFile!)).toBe(true);
+    expect(res.headers['Content-Type']).toBe('text/html');
+    expect(res.body).toContain('<base href="/docs/" />');
+    expect(res.body).toContain('window.__DOCFY_BASE_PATH__ = "/docs/"');
+    expect(res.body).toBe(
+      PATCHED_INDEX_HTML.replace(
+        '<head>',
+        `<head>\n    <base href="/docs/" />\n    <script>window.__DOCFY_BASE_PATH__ = "/docs/";</script>`,
+      ),
+    );
   });
 
   it('does not register a /api-json handler when staticSpecPath is omitted', () => {
@@ -62,7 +103,7 @@ describe('DocfyUiModule.setup()', () => {
     expect(calls.some((c) => c.args[0] === '/api-json')).toBe(false);
   });
 
-  it('registers a /api-json handler serving the given file\'s contents when staticSpecPath is set', () => {
+  it("registers a /api-json handler serving the given file's contents when staticSpecPath is set", () => {
     const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'docfy-ui-module-test-'));
     const specPath = path.join(tmpDir, 'openapi.json');
     fs.writeFileSync(specPath, '{"openapi":"3.0.0"}');
@@ -104,5 +145,86 @@ describe('DocfyUiModule.setup()', () => {
     expect(() =>
       DocfyUiModule.setup('/docs', app, { staticSpecPath: '/nonexistent/openapi.json' }),
     ).toThrow();
+  });
+});
+
+describe('DocfyUiModule.setup() — Fastify', () => {
+  it('registers a single scoped plugin at mountPath instead of using app.use()', () => {
+    const { app, calls, scopedRegistrations } = makeRecordingApp('fastify');
+    DocfyUiModule.setup('/docs', app);
+
+    expect(calls.some((c) => c.args[0] === '/docs')).toBe(false);
+    expect(scopedRegistrations).toHaveLength(1);
+    expect(scopedRegistrations[0].opts).toEqual({ prefix: '/docs' });
+  });
+
+  it('registers @fastify/static with wildcard/index disabled and decorateReply off', () => {
+    const { app, scopedRegistrations } = makeRecordingApp('fastify');
+    DocfyUiModule.setup('/docs', app);
+
+    const registerCall = scopedRegistrations[0].scopedCalls.find((c) => c.method === 'register');
+    expect(registerCall).toBeDefined();
+    const [, opts] = registerCall!.args as [unknown, Record<string, unknown>];
+    expect(opts.wildcard).toBe(false);
+    expect(opts.index).toBe(false);
+    expect(opts.decorateReply).toBe(false);
+    expect(opts.root as string).toMatch(/docfy-ui[/\\]dist$/);
+  });
+
+  it('the scoped not-found handler serves the patched index.html', () => {
+    const { app, scopedRegistrations } = makeRecordingApp('fastify');
+    DocfyUiModule.setup('/docs', app);
+
+    const notFoundCall = scopedRegistrations[0].scopedCalls.find(
+      (c) => c.method === 'setNotFoundHandler',
+    );
+    expect(notFoundCall).toBeDefined();
+    const handler = notFoundCall!.args[0] as (
+      req: unknown,
+      reply: ReturnType<typeof makeMockResponse>,
+    ) => void;
+
+    const reply = makeMockResponse();
+    handler(undefined, reply);
+
+    expect(reply.headers['Content-Type']).toBe('text/html');
+    expect(reply.body).toContain('<base href="/docs/" />');
+    expect(reply.body).toContain('window.__DOCFY_BASE_PATH__ = "/docs/"');
+  });
+
+  it('still registers /api-json via httpAdapter.get(), unaffected by the Fastify branch', () => {
+    const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'docfy-ui-module-test-'));
+    const specPath = path.join(tmpDir, 'openapi.json');
+    fs.writeFileSync(specPath, '{"openapi":"3.0.0"}');
+
+    const { app, calls } = makeRecordingApp('fastify');
+    DocfyUiModule.setup('/docs', app, { staticSpecPath: specPath });
+
+    const specCall = calls.find((c) => c.args[0] === '/api-json');
+    expect(specCall).toBeDefined();
+
+    const handler = specCall!.args[1] as (req: unknown, res: ReturnType<typeof makeMockResponse>) => void;
+    const res = makeMockResponse();
+    handler(undefined, res);
+
+    expect(res.headers['Content-Type']).toBe('application/json');
+    expect(res.body).toBe('{"openapi":"3.0.0"}');
+
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('throws a clear error when @fastify/static cannot be resolved', () => {
+    jest.resetModules();
+    jest.doMock('@fastify/static', () => {
+      throw new Error("Cannot find module '@fastify/static'");
+    });
+
+    const { DocfyUiModule: IsolatedDocfyUiModule } = require('../docfy-ui.module');
+    const { app } = makeRecordingApp('fastify');
+
+    expect(() => IsolatedDocfyUiModule.setup('/docs', app)).toThrow(/@fastify\/static/);
+
+    jest.dontMock('@fastify/static');
+    jest.resetModules();
   });
 });
