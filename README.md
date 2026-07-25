@@ -579,7 +579,7 @@ Call this **before** `SwaggerModule.setup()`: Express resolves routes in registr
 
 > **Fastify caveat**: `SwaggerModule.setup()` also registers its own `/api-json` route by default. On Express, whichever route is registered first silently wins. On Fastify, registering the same exact route twice throws `FST_ERR_DUPLICATED_ROUTE` at startup instead — registration order does not save you. When using `staticSpecPath` together with Fastify, point `SwaggerModule.setup()` at a different `jsonDocumentUrl`, or pass `{ raw: false }`, so it doesn't also claim `/api-json`.
 >
-> **Caveat**: `docfy-ui` renders with React Router's `BrowserRouter` and no configurable `basename` yet, so deep client-side routes (e.g. reloading an endpoint's detail page directly) only resolve correctly when `mountPath` is `/` — the application's root. Mounting elsewhere (e.g. `/docs`) still serves the UI and its initial load works fine; in-app navigation to a specific endpoint and then reloading that URL does not yet work at a non-root mount path.
+> `docfy-ui` reads the mount prefix `DocfyUiModule.setup()` injects (`window.__DOCFY_BASE_PATH__`) and passes it as `BrowserRouter`'s `basename`, so deep client-side routes (e.g. reloading an endpoint's detail page directly) resolve correctly at any `mountPath`, not just `/`.
 
 ## Interface-typed DTOs
 
