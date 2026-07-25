@@ -16,6 +16,12 @@ export interface PatchSpecResult {
   unparseableDocsFiles: string[];
 }
 
+export interface SpecPatchComputation {
+  patch: SpecPatch;
+  controllersWithoutDocs: string[];
+  unparseableDocsFiles: string[];
+}
+
 /**
  * Merges two SpecPatch maps, deep-merging at the operation level (not a
  * shallow per-method overwrite) — two different controllers can
@@ -43,28 +49,24 @@ function mergePatches(a: SpecPatch, b: SpecPatch): SpecPatch {
 }
 
 /**
- * Computes the fully-patched OpenAPI document from an already-built base
- * document plus every controller's companion docs file — all via static
- * analysis (ts-morph), no runtime require() of any docs file, no decorator
- * application, no dependency on a live class reference matching the one
- * the running app actually uses.
+ * Computes the SpecPatch for every controller's companion docs file — all
+ * via static analysis (ts-morph), no runtime require() of any docs file, no
+ * decorator application, no dependency on a live class reference matching
+ * the one the running app actually uses, and no base OpenAPI document
+ * needed. Shared by `computePatchedDocument` (the `patch-spec` CLI command,
+ * which merges into an already-built document) and the CLI plugin
+ * (`src/plugin/`, which has no base document available at compile time and
+ * instead serializes this patch to a file for `applyDocfyMetadata()` to
+ * merge at runtime).
  *
- * This is the alternative to DocfyModule's runtime pipeline for apps where
- * that pipeline structurally cannot work (NestJS CLI's `webpack: true`
- * build mode — see the README's "Not supported" section). Run this as a
- * build step instead: generate the OpenAPI document however you already
- * do (SwaggerModule.createDocument + write to a file, or fetch a running
- * app's /api-json), then patch it with this.
- *
- * `readDocsFile` is injected so this function stays pure/testable —
- * the real CLI command supplies `fs.readFileSync`.
+ * `readDocsFile` is injected so this function stays pure/testable — real
+ * callers supply `fs.readFileSync`.
  */
-export function computePatchedDocument(
-  document: OpenApiDocument,
+export function computeSpecPatch(
   controllers: ControllerInfo[],
   format: 'ts' | 'js',
   readDocsFile: (absolutePath: string) => string | null,
-): PatchSpecResult {
+): SpecPatchComputation {
   let patch: SpecPatch = {};
   const controllersWithoutDocs: string[] = [];
   const unparseableDocsFiles: string[] = [];
@@ -90,6 +92,28 @@ export function computePatchedDocument(
 
     patch = mergePatches(patch, buildOpenApiPatch(ctrl, config));
   }
+
+  return { patch, controllersWithoutDocs, unparseableDocsFiles };
+}
+
+/**
+ * Computes the fully-patched OpenAPI document from an already-built base
+ * document plus every controller's companion docs file.
+ *
+ * This is the alternative to DocfyModule's runtime pipeline for apps where
+ * that pipeline structurally cannot work (NestJS CLI's `webpack: true`
+ * build mode — see the README's "Not supported" section). Run this as a
+ * build step instead: generate the OpenAPI document however you already
+ * do (SwaggerModule.createDocument + write to a file, or fetch a running
+ * app's /api-json), then patch it with this.
+ */
+export function computePatchedDocument(
+  document: OpenApiDocument,
+  controllers: ControllerInfo[],
+  format: 'ts' | 'js',
+  readDocsFile: (absolutePath: string) => string | null,
+): PatchSpecResult {
+  const { patch, controllersWithoutDocs, unparseableDocsFiles } = computeSpecPatch(controllers, format, readDocsFile);
 
   const { document: patchedDocument, unmatchedRoutes } = mergeSpecPatch(document, patch);
   const patchedOperationCount = Object.values(patch).reduce(

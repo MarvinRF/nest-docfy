@@ -9,3 +9,4 @@ export {
   DocfyUiSetupOptions,
   DocfyUiHttpAdapter,
 } from './docfy-ui.module';
+export { applyDocfyMetadata, ApplyDocfyMetadataOptions } from './apply-docfy-metadata';

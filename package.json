@@ -14,6 +14,11 @@
       "types": "./dist/testing.d.ts",
       "require": "./dist/testing.js",
       "default": "./dist/testing.js"
+    },
+    "./plugin": {
+      "types": "./dist/plugin/index.d.ts",
+      "require": "./dist/plugin/index.js",
+      "default": "./dist/plugin/index.js"
     }
   },
   "bin": {
