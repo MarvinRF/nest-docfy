@@ -1,0 +1,38 @@
+name: Release
+
+# Manual only — deliberately NOT triggered on push. Version bump, changelog,
+# git tag, GitHub release, and npm publish all happen in this one run once
+# someone dispatches it from the Actions tab (or `gh workflow run release.yml`).
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  issues: write
+  pull-requests: write
+  id-token: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - run: npm test -- --ci
+
+      - name: Release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: npx semantic-release
