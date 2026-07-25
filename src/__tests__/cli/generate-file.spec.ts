@@ -840,6 +840,26 @@ describe('renderDocsFile() — interface DTO → schema:', () => {
     expect(output).toContain("schema:");
     expect(output).not.toContain('type: EmptyDto');
   });
+
+  it('renders a oneOf property (heterogeneous union) instead of dropping it', () => {
+    const ctrl = makeCtrl({
+      methods: [{
+        name: 'register', httpDecorator: 'Post', httpPath: '',
+        params: [], returnType: 'Promise<RegisterResponseDto>',
+        responseType: makeInterfaceResponseType({
+          schema: {
+            properties: { weird: { oneOf: [{ type: 'string' }, { type: 'number' }] } },
+            required: ['weird'],
+          },
+        }),
+        isAsync: true, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
+      }],
+    });
+    const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
+    expect(output).toContain('oneOf: [');
+    expect(output).toContain("type: 'string'");
+    expect(output).toContain("type: 'number'");
+  });
 });
 
 describe('renderDocsFile() — @HttpCode()', () => {

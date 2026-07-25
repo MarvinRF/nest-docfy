@@ -1,4 +1,4 @@
-import type { OpenApiSchema, OperationPatch, SpecPatch } from './build-openapi-patch';
+import type { MediaTypeContent, OpenApiSchema, OperationPatch, SpecPatch } from './build-openapi-patch';
 
 export interface OpenApiDocument {
   paths?: Record<string, Record<string, OpenApiOperation>>;
@@ -12,8 +12,8 @@ export interface OpenApiOperation {
   deprecated?: boolean;
   security?: Array<Record<string, string[]>>;
   parameters?: Array<{ name: string; in: string; required?: boolean; schema: OpenApiSchema }>;
-  requestBody?: { required?: boolean; content: Record<string, { schema: OpenApiSchema }> };
-  responses?: Record<string, { description?: string; content?: Record<string, { schema: OpenApiSchema }> }>;
+  requestBody?: { required?: boolean; content: Record<string, MediaTypeContent> };
+  responses?: Record<string, { description?: string; content?: Record<string, MediaTypeContent> }>;
   [key: string]: unknown;
 }
 

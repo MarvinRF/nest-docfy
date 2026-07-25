@@ -22,6 +22,7 @@ export interface SchemaProperty {
   minLength?: number;
   maxLength?: number;
   enum?: (string | number)[];
+  oneOf?: SchemaProperty[];
 }
 
 export interface InlineSchema {
@@ -55,6 +56,16 @@ export interface ResponseTypeInfo {
    * Used to emit `schema:` instead of `type:` so docs are accurate even without @ApiProperty.
    */
   classSchema?: InlineSchema;
+  /**
+   * Set when the original type was a union of ≥2 named DTO/entity types
+   * (e.g. `UserDto | AdminDto`), each resolved the same way a single named
+   * type would be. `name` becomes a ` | `-joined, non-identifier placeholder
+   * so the existing `IDENTIFIER_RE` guards in generate-file.ts continue to
+   * treat this like any other unresolvable type (no import, no `type:`
+   * codegen) — only patch-spec's schema synthesis reads `unionMembers`, to
+   * build an OpenAPI `oneOf`.
+   */
+  unionMembers?: ResponseTypeInfo[];
 }
 
 export interface MethodInfo {
@@ -176,9 +187,27 @@ function typeToSchemaProperty(type: Type, depth: number): SchemaProperty {
         core = nonNull[0];
       } else if (nonNull.length === 0) {
         return { nullable: true };
+      } else if (nonNull.every((t) => t.isStringLiteral())) {
+        // Union of string literals — the common "poor man's enum" shape (`'a' | 'b' | 'c'`).
+        const values = nonNull
+          .map((t) => t.getLiteralValue())
+          .filter((v): v is string => typeof v === 'string');
+        return { type: 'string', enum: values, ...(isNullable ? { nullable: true } : {}) };
+      } else if (nonNull.every((t) => t.isNumberLiteral())) {
+        const values = nonNull
+          .map((t) => t.getLiteralValue())
+          .filter((v): v is number => typeof v === 'number');
+        const allIntegers = values.every((v) => Number.isInteger(v));
+        return {
+          type: allIntegers ? 'integer' : 'number',
+          enum: values,
+          ...(isNullable ? { nullable: true } : {}),
+        };
       } else {
-        // Complex multi-type union — omit type hint, keep nullable flag
-        return isNullable ? { nullable: true } : {};
+        // Heterogeneous union (mixed primitive kinds, or ≥2 object/interface types) —
+        // represent as oneOf rather than silently dropping the type info.
+        const oneOf = nonNull.map((t) => typeToSchemaProperty(t, depth + 1));
+        return { oneOf, ...(isNullable ? { nullable: true } : {}) };
       }
     }
 
@@ -396,15 +425,54 @@ function buildSchemaFromClass(cls: ClassDeclaration): InlineSchema | null {
 // ---------------------------------------------------------------------------
 
 /**
+ * Resolves a union type (`A | B`) into a `ResponseTypeInfo` carrying
+ * `unionMembers` — used by patch-spec to synthesize an OpenAPI `oneOf`
+ * schema, the common shape for a return type or `@Body()` payload that's a
+ * discriminated union of DTOs/entities. Bails to null (matching the existing
+ * "leave alone" behavior for unresolvable types) unless every non-null/
+ * undefined branch resolves to a named type — a partial `oneOf` that
+ * silently drops a branch would be worse than no schema at all.
+ *
+ * `name` is deliberately a ` | `-joined, non-identifier string: every
+ * `IDENTIFIER_RE` guard in generate-file.ts already treats a non-identifier
+ * `name` as "nothing safe to import/reference", so a union responseType
+ * flows through `generate` exactly like today's unresolvable-type case,
+ * with zero changes needed there.
+ */
+function resolveUnionOfNamedTypes(type: Type, isArray: boolean): ResponseTypeInfo | null {
+  const branches = type.getUnionTypes().filter((t) => !t.isNull() && !t.isUndefined());
+  if (branches.length < 2) {
+    return branches.length === 1 ? resolveNamedType(branches[0], isArray) : null;
+  }
+
+  const members: ResponseTypeInfo[] = [];
+  for (const branch of branches) {
+    const resolved = resolveNamedType(branch, false);
+    if (!resolved) return null;
+    members.push(resolved);
+  }
+
+  return {
+    name: members.map((m) => m.name).join(' | '),
+    absolutePath: members[0].absolutePath,
+    isArray,
+    isInterface: false,
+    unionMembers: members,
+  };
+}
+
+/**
  * Resolves a named DTO/class type from a ts-morph Type.
- * Returns null for primitives, anonymous objects, union/intersection, node_modules, .d.ts.
+ * Returns null for primitives, anonymous objects, intersections, node_modules, .d.ts.
+ * Unions are delegated to `resolveUnionOfNamedTypes` instead of bailing.
  */
 function resolveNamedType(type: Type, isArray: boolean): ResponseTypeInfo | null {
   try {
+    if (type.isUnion()) return resolveUnionOfNamedTypes(type, isArray);
     if (type.isString() || type.isNumber() || type.isBoolean()) return null;
     if (type.isUndefined() || type.isNull() || type.isVoid()) return null;
     if (type.isAnonymous()) return null;
-    if (type.isUnion() || type.isIntersection()) return null;
+    if (type.isIntersection()) return null;
     if (type.isTuple()) return null;
 
     const symbol = type.getSymbol() ?? type.getAliasSymbol();

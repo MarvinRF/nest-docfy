@@ -4,6 +4,12 @@ import { isUnresolved, EvaluatedValue } from './eval-decorator-args';
 
 export type OpenApiSchema = Record<string, unknown>;
 
+export interface MediaTypeContent {
+  schema?: OpenApiSchema;
+  example?: unknown;
+  examples?: Record<string, unknown>;
+}
+
 export interface OperationPatch {
   tags?: string[];
   summary?: string;
@@ -11,8 +17,8 @@ export interface OperationPatch {
   deprecated?: boolean;
   security?: Array<Record<string, string[]>>;
   parameters?: Array<{ name: string; in: string; required?: boolean; schema: OpenApiSchema }>;
-  requestBody?: { required?: boolean; content: Record<string, { schema: OpenApiSchema }> };
-  responses?: Record<string, { description?: string; content?: Record<string, { schema: OpenApiSchema }> }>;
+  requestBody?: { required?: boolean; content: Record<string, MediaTypeContent> };
+  responses?: Record<string, { description?: string; content?: Record<string, MediaTypeContent> }>;
 }
 
 /** path -> httpMethod (lowercase) -> patch */
@@ -29,6 +35,10 @@ function joinPaths(controllerPath: string | null, methodPath: string | null): st
 
 function schemaFromResponseType(info: ResponseTypeInfo | null): OpenApiSchema | undefined {
   if (!info) return undefined;
+  if (info.unionMembers) {
+    const base: OpenApiSchema = { oneOf: info.unionMembers.map((m) => schemaFromResponseType(m)) };
+    return info.isArray ? { type: 'array', items: base } : base;
+  }
   const inline = info.classSchema ?? info.inlineSchema;
   const base: OpenApiSchema = inline
     ? { type: 'object', properties: inline.properties, ...(inline.required.length ? { required: inline.required } : {}) }
@@ -41,17 +51,42 @@ function findBodyResponseType(method: MethodInfo): ResponseTypeInfo | null {
   return bodyParam?.bodyType ?? null;
 }
 
+/**
+ * True when `value` is itself Unresolved, or is an array/object containing an
+ * Unresolved marker anywhere inside it. A shallow check isn't enough here —
+ * `evaluateExpression` recurses into nested object/array literals, so a
+ * single non-literal sub-value (a variable, a function call) buried inside
+ * an otherwise-literal `schema`/`example` object still needs to bail the
+ * whole value rather than leak the internal `{ __unresolved, text }` marker
+ * shape into the emitted OpenAPI document as if it were real data.
+ */
+function containsUnresolved(value: EvaluatedValue): boolean {
+  if (isUnresolved(value)) return true;
+  if (Array.isArray(value)) return value.some(containsUnresolved);
+  if (value !== null && typeof value === 'object') return Object.values(value).some(containsUnresolved);
+  return false;
+}
+
 /** Resolves a schema for an ApiBody/ApiResponse `type`/`schema` argument value. */
 function resolveSchemaArg(
   value: EvaluatedValue | undefined,
   fallback: ResponseTypeInfo | null,
 ): OpenApiSchema | undefined {
   if (value === undefined) return schemaFromResponseType(fallback);
-  if (isUnresolved(value)) return schemaFromResponseType(fallback);
-  if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
+  if (typeof value === 'object' && value !== null && !Array.isArray(value) && !containsUnresolved(value)) {
     return value as OpenApiSchema;
   }
   return schemaFromResponseType(fallback);
+}
+
+/**
+ * Resolves an ApiResponse/ApiBody `example`/`examples` option to a plain
+ * literal value, or undefined if it's absent or contains any unresolved
+ * (non-literal) part — same "don't guess" rule as `resolveSchemaArg`.
+ */
+function literalValue(value: EvaluatedValue | undefined): unknown {
+  if (value === undefined || containsUnresolved(value)) return undefined;
+  return value;
 }
 
 function asRecord(value: EvaluatedValue | undefined): Record<string, EvaluatedValue> {
@@ -67,18 +102,35 @@ function plain(value: EvaluatedValue | undefined): string | number | boolean | u
 }
 
 /**
+ * Extracts an ApiParam/ApiQuery/ApiHeader/ApiProperty `enum` option into an
+ * OpenAPI-ready array of string/number values. Handles both shapes that
+ * reach here as an already-evaluated array: a literal `enum: ['a', 'b']`
+ * and `enum: Role` (a TS enum reference resolved by eval-decorator-args to
+ * its member values). Anything else (unresolved, not an array, empty) is
+ * left out of the schema rather than guessed at.
+ */
+function enumSchemaValues(value: EvaluatedValue | undefined): (string | number)[] | undefined {
+  if (!Array.isArray(value)) return undefined;
+  const values = value.filter((v): v is string | number => typeof v === 'string' || typeof v === 'number');
+  return values.length > 0 ? values : undefined;
+}
+
+/**
  * Computes the OpenAPI fragment a controller's `.docs.ts` file represents,
  * purely from statically-extracted data — no decorators are applied to any
  * class, no Reflect metadata is touched, nothing is required() at runtime.
  *
  * This intentionally does not aim for full parity with what `@nestjs/swagger`
  * decorators would produce when actually applied (that's a much larger
- * surface — enums, oneOf/anyOf, examples, links, callbacks, etc.). It covers
- * the common path: tags, operation summary/description, responses with a
- * status + description + schema, request bodies, and bearer auth — enough
- * to validate that statically-computed patches can stand in for runtime
- * decoration where the latter is structurally impossible (see the README's
- * "Not supported: webpack: true" section).
+ * surface — links, callbacks, etc. that `@nestjs/swagger` itself doesn't
+ * expose a decorator option for anyway). It covers the common path: tags,
+ * operation summary/description, responses with a status + description +
+ * schema (including a `oneOf` when the return type or `@Body()` payload is a
+ * union of named DTOs) + example/examples, request bodies, bearer auth, and
+ * enum-valued params/headers — enough to validate that statically-computed
+ * patches can stand in for runtime decoration where the latter is
+ * structurally impossible (see the README's "Not supported: webpack: true"
+ * section).
  */
 export function buildOpenApiPatch(ctrl: ControllerInfo, config: ExtractedDocsConfig): SpecPatch {
   const patch: SpecPatch = {};
@@ -117,11 +169,18 @@ export function buildOpenApiPatch(ctrl: ControllerInfo, config: ExtractedDocsCon
           const statusKey = typeof status === 'number' ? String(status) : 'default';
           const description = plain(arg.description);
           const schema = resolveSchemaArg(arg.schema ?? arg.type, method.responseType);
+          const example = literalValue(arg.example);
+          const examples = literalValue(arg.examples);
+          const mediaType: MediaTypeContent = {
+            ...(schema ? { schema } : {}),
+            ...(example !== undefined ? { example } : {}),
+            ...(examples !== undefined ? { examples: examples as Record<string, unknown> } : {}),
+          };
 
           op.responses ??= {};
           op.responses[statusKey] = {
             ...(typeof description === 'string' ? { description } : {}),
-            ...(schema ? { content: { 'application/json': { schema } } } : {}),
+            ...(Object.keys(mediaType).length > 0 ? { content: { 'application/json': mediaType } } : {}),
           };
           break;
         }
@@ -130,10 +189,17 @@ export function buildOpenApiPatch(ctrl: ControllerInfo, config: ExtractedDocsCon
           const arg = asRecord(call.args[0]);
           const fallback = findBodyResponseType(method);
           const schema = resolveSchemaArg(arg.schema ?? arg.type, fallback);
-          if (schema) {
+          const example = literalValue(arg.example);
+          const examples = literalValue(arg.examples);
+          const mediaType: MediaTypeContent = {
+            ...(schema ? { schema } : {}),
+            ...(example !== undefined ? { example } : {}),
+            ...(examples !== undefined ? { examples: examples as Record<string, unknown> } : {}),
+          };
+          if (Object.keys(mediaType).length > 0) {
             op.requestBody = {
               required: true,
-              content: { 'application/json': { schema } },
+              content: { 'application/json': mediaType },
             };
           }
           break;
@@ -152,13 +218,15 @@ export function buildOpenApiPatch(ctrl: ControllerInfo, config: ExtractedDocsCon
           if (typeof name !== 'string') break;
           const paramIn = call.name === 'ApiParam' ? 'path' : call.name === 'ApiQuery' ? 'query' : 'header';
           const required = plain(arg.required);
+          const enumValues = enumSchemaValues(arg.enum);
+          const schemaType = enumValues?.every((v) => typeof v === 'number') ? 'number' : 'string';
           op.parameters = [
             ...(op.parameters ?? []),
             {
               name,
               in: paramIn,
               ...(typeof required === 'boolean' ? { required } : {}),
-              schema: { type: 'string' },
+              schema: { type: schemaType, ...(enumValues ? { enum: enumValues } : {}) },
             },
           ];
           break;

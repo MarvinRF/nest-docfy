@@ -212,6 +212,12 @@ function renderSchemaProperty(prop: SchemaProperty, indent: string): string {
     const vals = prop.enum.map((v) => typeof v === 'string' ? `'${v}'` : String(v)).join(', ');
     pairs.push(`${inner}enum: [${vals}]`);
   }
+  if (prop.oneOf && prop.oneOf.length > 0) {
+    const entries = prop.oneOf
+      .map((p) => `${inner}  ${renderSchemaProperty(p, `${inner}  `)}`)
+      .join(',\n');
+    pairs.push(`${inner}oneOf: [\n${entries},\n${inner}]`);
+  }
   if (prop.items !== undefined) {
     pairs.push(`${inner}items: ${renderSchemaProperty(prop.items, inner)}`);
   }
