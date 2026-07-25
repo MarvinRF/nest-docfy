@@ -1,7 +1,18 @@
 import type { MediaTypeContent, OpenApiSchema, OperationPatch, SpecPatch } from './build-openapi-patch';
 
+/**
+ * `paths` is deliberately untyped (`unknown`), not `Record<string,
+ * Record<string, OpenApiOperation>>` — a `Record<...>` requires the source
+ * value to structurally carry an index signature, which real-world OpenAPI
+ * document types (e.g. `@nestjs/swagger`'s `OpenAPIObject`/`PathsObject`/
+ * `PathItemObject`, which use named optional properties like `get?`/`post?`
+ * instead) don't, making them structurally incompatible with any `Record<...>`
+ * shape here for no runtime-meaningful reason — `unknown` sidesteps that
+ * entirely since any type is assignable to it. `mergeSpecPatch` casts it to
+ * the working shape internally where it actually needs to read/write it.
+ */
 export interface OpenApiDocument {
-  paths?: Record<string, Record<string, OpenApiOperation>>;
+  paths?: unknown;
   [key: string]: unknown;
 }
 
@@ -54,18 +65,32 @@ function mergeSecurity(
   return merged;
 }
 
+/**
+ * Additive for a genuinely new parameter, but a *merge* (patch fields
+ * overwrite, matching `mergeOperation`'s own scalar semantics) when one
+ * already exists with the same name+location — not a no-op. `@nestjs/swagger`
+ * auto-generates a bare parameter entry (`required: true`, no `enum`) from
+ * reflection alone for any `@Query()`/`@Param()`-decorated handler argument,
+ * even with zero `@Api*` decorators — so "already exists" is the common
+ * case, not the exception, and treating it as "keep the base, discard the
+ * patch" would silently swallow every `ApiQuery`/`ApiParam` enrichment a
+ * docs file adds for a parameter Nest already knew about.
+ */
 function mergeParameters(
   existing: OpenApiOperation['parameters'],
   incoming: OpenApiOperation['parameters'],
 ): OpenApiOperation['parameters'] | undefined {
   if (!incoming) return existing;
   const key = (p: { name: string; in: string }) => `${p.in}:${p.name}`;
-  const seen = new Set((existing ?? []).map(key));
   const merged = [...(existing ?? [])];
+  const indexByKey = new Map(merged.map((p, i) => [key(p), i]));
   for (const param of incoming) {
-    if (!seen.has(key(param))) {
+    const existingIndex = indexByKey.get(key(param));
+    if (existingIndex === undefined) {
+      indexByKey.set(key(param), merged.length);
       merged.push(param);
-      seen.add(key(param));
+    } else {
+      merged[existingIndex] = { ...merged[existingIndex], ...param };
     }
   }
   return merged;
@@ -123,8 +148,9 @@ export interface MergeSpecPatchResult {
  * Does not mutate the input document.
  */
 export function mergeSpecPatch(document: OpenApiDocument, patch: SpecPatch): MergeSpecPatchResult {
-  const paths: Record<string, Record<string, OpenApiOperation>> = {};
-  for (const [route, methods] of Object.entries(document.paths ?? {})) {
+  const existingPaths = (document.paths ?? {}) as Record<string, Record<string, unknown>>;
+  const paths: Record<string, Record<string, unknown>> = {};
+  for (const [route, methods] of Object.entries(existingPaths)) {
     paths[route] = { ...methods };
   }
 
@@ -132,7 +158,7 @@ export function mergeSpecPatch(document: OpenApiDocument, patch: SpecPatch): Mer
 
   for (const [route, methods] of Object.entries(patch)) {
     for (const [httpMethod, opPatch] of Object.entries(methods)) {
-      const existingOperation = paths[route]?.[httpMethod];
+      const existingOperation = paths[route]?.[httpMethod] as OpenApiOperation | undefined;
       if (!existingOperation) {
         unmatchedRoutes.push(`${httpMethod.toUpperCase()} ${route}`);
         continue;

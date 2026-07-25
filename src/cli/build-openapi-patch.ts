@@ -26,11 +26,26 @@ export type SpecPatch = Record<string, Record<string, OperationPatch>>;
 
 const HTTP_METHODS_OPENAPI = new Set(['get', 'post', 'put', 'patch', 'delete', 'head', 'options']);
 
+/**
+ * Converts NestJS's Express-style route param syntax (`:id`) to OpenAPI's
+ * path templating syntax (`{id}`) — the format `@nestjs/swagger`'s generated
+ * base document actually uses for `paths` keys. Without this, patch-spec/the
+ * CLI plugin would compute a route key that never matches any parameterized
+ * route in the real document (`/users/:id` vs `/users/{id}`), silently
+ * dropping the patch for every such route rather than erroring loudly —
+ * exactly the kind of failure `unmatchedRoutes` exists to surface, except
+ * this bypassed it entirely by producing an internally-consistent but
+ * wrong key on both sides of the CLI's own tests.
+ */
+function toOpenApiPathParams(path: string): string {
+  return path.replace(/:([A-Za-z0-9_]+)/g, '{$1}');
+}
+
 function joinPaths(controllerPath: string | null, methodPath: string | null): string {
   const a = (controllerPath ?? '').replace(/^\/+|\/+$/g, '');
   const b = (methodPath ?? '').replace(/^\/+|\/+$/g, '');
   const joined = [a, b].filter(Boolean).join('/');
-  return `/${joined}`;
+  return toOpenApiPathParams(`/${joined}`);
 }
 
 function schemaFromResponseType(info: ResponseTypeInfo | null): OpenApiSchema | undefined {
@@ -193,11 +208,13 @@ export function buildOpenApiPatch(ctrl: ControllerInfo, config: ExtractedDocsCon
           const arg = asRecord(call.args[0]);
           const fallback = findBodyResponseType(method);
           const schema = resolveSchemaArg(arg.schema ?? arg.type, fallback);
-          const example = literalValue(arg.example);
+          // @nestjs/swagger's real ApiBodyOptions type only has `examples`
+          // (a map), never a singular `example` — unlike ApiResponse, which
+          // supports both. Reading `example` here would be dead code: no
+          // type-checked docs file could ever legitimately pass it.
           const examples = literalValue(arg.examples);
           const mediaType: MediaTypeContent = {
             ...(schema ? { schema } : {}),
-            ...(example !== undefined ? { example } : {}),
             ...(examples !== undefined ? { examples: examples as Record<string, unknown> } : {}),
           };
           if (Object.keys(mediaType).length > 0) {

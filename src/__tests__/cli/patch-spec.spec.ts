@@ -1,6 +1,6 @@
 import { computePatchedDocument } from '../../cli/patch-spec';
 import type { ControllerInfo, MethodInfo } from '../../cli/extract-methods';
-import type { OpenApiDocument } from '../../cli/merge-spec-patch';
+import type { OpenApiDocument, OpenApiOperation } from '../../cli/merge-spec-patch';
 
 function makeMethod(overrides: Partial<MethodInfo> = {}): MethodInfo {
   return {
@@ -36,6 +36,11 @@ const BASE_DOCUMENT: OpenApiDocument = {
   paths: { '/users': { get: { operationId: 'UsersController_findAll' } } },
 };
 
+/** `OpenApiDocument.paths` is `unknown` (see merge-spec-patch.ts for why) — this narrows it for test assertions. */
+function paths(doc: OpenApiDocument): Record<string, Record<string, unknown>> {
+  return doc.paths as Record<string, Record<string, unknown>>;
+}
+
 const DOCS_FILE = `
 docs(UsersController, {
   classDecorators: [ApiTags('users')],
@@ -48,7 +53,7 @@ docs(UsersController, {
 describe('computePatchedDocument()', () => {
   it("patches the matching operation using the controller's docs file content", () => {
     const result = computePatchedDocument(BASE_DOCUMENT, [makeCtrl()], 'ts', () => DOCS_FILE);
-    expect(result.document.paths!['/users'].get).toMatchObject({
+    expect(paths(result.document)['/users'].get).toMatchObject({
       summary: 'List users',
       tags: ['users'],
     });
@@ -57,6 +62,28 @@ describe('computePatchedDocument()', () => {
   it('counts exactly the operations a docs file actually patched', () => {
     const result = computePatchedDocument(BASE_DOCUMENT, [makeCtrl()], 'ts', () => DOCS_FILE);
     expect(result.patchedOperationCount).toBe(1);
+  });
+
+  it('matches a parameterized route against a real @nestjs/swagger-shaped document ({id}, not :id)', () => {
+    // Regression test: @nestjs/swagger's own generated document keys `paths`
+    // using OpenAPI's {id} templating, never NestJS's own Express-style :id
+    // route syntax. A patch computed the wrong way would report every such
+    // route as unmatched and silently never apply, with the CLI plugin's
+    // automatic path giving zero visibility into it happening at all.
+    const docWithParamRoute: OpenApiDocument = {
+      openapi: '3.0.0',
+      paths: { '/users/{id}': { get: { operationId: 'UsersController_findOne' } } },
+    };
+    const ctrl = makeCtrl({ methods: [makeMethod({ httpPath: ':id' })] });
+    const docsFile = `
+      docs(UsersController, {
+        classDecorators: [],
+        methods: { findAll: [ApiOperation({ summary: 'Find a user by id' })] },
+      });
+    `;
+    const result = computePatchedDocument(docWithParamRoute, [ctrl], 'ts', () => docsFile);
+    expect(result.unmatchedRoutes).toEqual([]);
+    expect((paths(result.document)['/users/{id}'].get as OpenApiOperation).summary).toBe('Find a user by id');
   });
 
   it('reports controllers with no docs file separately, without treating it as an error', () => {
@@ -94,8 +121,8 @@ describe('computePatchedDocument()', () => {
         : `docs(OrdersController, { classDecorators: [ApiTags('orders')], methods: { findAll: [] } });`;
 
     const result = computePatchedDocument(doc, [makeCtrl(), ordersCtrl], 'ts', readDocsFile);
-    expect(result.document.paths!['/users'].get.tags).toEqual(['users']);
-    expect(result.document.paths!['/orders'].get.tags).toEqual(['orders']);
+    expect((paths(result.document)['/users'].get as OpenApiOperation).tags).toEqual(['users']);
+    expect((paths(result.document)['/orders'].get as OpenApiOperation).tags).toEqual(['orders']);
   });
 
   it('deep-merges two different controllers patching the exact same path+method, instead of letting the second wipe the first', () => {
@@ -129,7 +156,7 @@ describe('computePatchedDocument()', () => {
       return call === 1 ? richDocs : sparseDocs;
     });
 
-    expect(result.document.paths!['/users'].get.responses!['200'].content).toEqual({
+    expect((paths(result.document)['/users'].get as OpenApiOperation).responses!['200'].content).toEqual({
       'application/json': { schema: { type: 'object', properties: { ok: { type: 'boolean' } } } },
     });
   });

@@ -1,6 +1,11 @@
 import { mergeSpecPatch, mergeOperation, OpenApiDocument, OpenApiOperation } from '../../cli/merge-spec-patch';
 import type { SpecPatch } from '../../cli/build-openapi-patch';
 
+/** `OpenApiDocument.paths` is `unknown` (see merge-spec-patch.ts for why) — this narrows it for test assertions. */
+function paths(doc: OpenApiDocument): Record<string, Record<string, unknown>> {
+  return doc.paths as Record<string, Record<string, unknown>>;
+}
+
 describe('mergeOperation()', () => {
   it('overwrites scalar fields', () => {
     const existing: OpenApiOperation = { summary: 'old' };
@@ -51,6 +56,26 @@ describe('mergeOperation()', () => {
     expect(result.parameters).toHaveLength(2);
   });
 
+  it('enriches an already-existing parameter instead of discarding the patch for it', () => {
+    // Real-world shape this reproduces: @nestjs/swagger auto-generates a bare
+    // parameter entry (required: true, no enum) from reflection alone for
+    // any @Query()-decorated handler argument, even with zero @Api*
+    // decorators on it. A docs file's ApiQuery({ enum, required: false })
+    // for that same parameter must enrich it, not be silently dropped
+    // because "a parameter with this name+location already exists".
+    const existing: OpenApiOperation = {
+      parameters: [{ name: 'role', in: 'query', required: true, schema: { type: 'string' } }],
+    };
+    const result = mergeOperation(existing, {
+      parameters: [
+        { name: 'role', in: 'query', required: false, schema: { type: 'string', enum: ['member', 'admin'] } },
+      ],
+    });
+    expect(result.parameters).toEqual([
+      { name: 'role', in: 'query', required: false, schema: { type: 'string', enum: ['member', 'admin'] } },
+    ]);
+  });
+
   it('dedupes security entries by their key set', () => {
     const existing: OpenApiOperation = { security: [{ bearer: [] }] };
     const result = mergeOperation(existing, { security: [{ bearer: [] }] });
@@ -74,7 +99,7 @@ describe('mergeSpecPatch()', () => {
       '/users': { get: { summary: 'List users', tags: ['users'] } },
     };
     const { document } = mergeSpecPatch(baseDocument, patch);
-    expect(document.paths!['/users'].get).toMatchObject({
+    expect(paths(document)['/users'].get).toMatchObject({
       operationId: 'UsersController_findAll',
       summary: 'List users',
       tags: ['users'],
@@ -84,20 +109,20 @@ describe('mergeSpecPatch()', () => {
   it('does not mutate the input document', () => {
     const patch: SpecPatch = { '/users': { get: { summary: 'List users' } } };
     mergeSpecPatch(baseDocument, patch);
-    expect(baseDocument.paths!['/users'].get.summary).toBeUndefined();
+    expect((paths(baseDocument)['/users'].get as OpenApiOperation).summary).toBeUndefined();
   });
 
   it('leaves operations the patch does not touch completely unchanged', () => {
     const patch: SpecPatch = { '/users': { get: { summary: 'List users' } } };
     const { document } = mergeSpecPatch(baseDocument, patch);
-    expect(document.paths!['/users'].post).toEqual(baseDocument.paths!['/users'].post);
+    expect(paths(document)['/users'].post).toEqual(paths(baseDocument)['/users'].post);
   });
 
   it('reports a patch route+method with no matching base operation as unmatched, without throwing', () => {
     const patch: SpecPatch = { '/ghost': { delete: { summary: 'does not exist in base' } } };
     const { document, unmatchedRoutes } = mergeSpecPatch(baseDocument, patch);
     expect(unmatchedRoutes).toEqual(['DELETE /ghost']);
-    expect(document.paths!['/ghost']).toBeUndefined();
+    expect(paths(document)['/ghost']).toBeUndefined();
   });
 
   it('preserves unrelated top-level document fields (info, components, etc.)', () => {

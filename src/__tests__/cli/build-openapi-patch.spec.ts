@@ -39,6 +39,18 @@ describe('buildOpenApiPatch()', () => {
     expect(Object.keys(patch)).toEqual(['/users/active']);
   });
 
+  it('converts Express-style route params (:id) to OpenAPI path templating ({id})', () => {
+    // @nestjs/swagger's generated base document keys its `paths` by the
+    // OpenAPI convention ({id}), not NestJS's own Express-style route syntax
+    // (:id) — a patch keyed the wrong way would never match any
+    // parameterized route in a real document (see mergeSpecPatch tests for
+    // the end-to-end regression this guards against).
+    const ctrl = makeCtrl({ methods: [makeMethod({ httpPath: ':id/:action' })] });
+    const config: ExtractedDocsConfig = { classDecorators: [], methods: {} };
+    const patch = buildOpenApiPatch(ctrl, config);
+    expect(Object.keys(patch)).toEqual(['/users/{id}/{action}']);
+  });
+
   it('lowercases the HTTP method as the OpenAPI key', () => {
     const ctrl = makeCtrl({ methods: [makeMethod({ httpDecorator: 'Post', httpPath: '' })] });
     const config: ExtractedDocsConfig = { classDecorators: [], methods: {} };
@@ -383,7 +395,7 @@ describe('buildOpenApiPatch()', () => {
       },
     };
     const patch = buildOpenApiPatch(ctrl, config);
-    expect(patch['/users/:id'].get.parameters).toEqual([
+    expect(patch['/users/{id}'].get.parameters).toEqual([
       { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
       { name: 'search', in: 'query', schema: { type: 'string' } },
     ]);
@@ -401,7 +413,7 @@ describe('buildOpenApiPatch()', () => {
       },
     };
     const patch = buildOpenApiPatch(ctrl, config);
-    expect(patch['/users/:id'].get.parameters).toEqual([
+    expect(patch['/users/{id}'].get.parameters).toEqual([
       { name: 'status', in: 'query', schema: { type: 'string', enum: ['active', 'inactive'] } },
       { name: 'level', in: 'query', schema: { type: 'number', enum: [0, 1, 2] } },
     ]);

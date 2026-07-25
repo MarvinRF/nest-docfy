@@ -12,6 +12,19 @@ export interface ApplyDocfyMetadataOptions {
 }
 
 /**
+ * Deliberately looser than `OpenApiDocument` (no `[key: string]: unknown`
+ * catch-all) — that catch-all exists so patch-spec/tests can freely type a
+ * fresh object literal with arbitrary extra OpenAPI fields, but it makes
+ * `OpenApiDocument` unable to structurally accept a real, concretely-typed
+ * document like `@nestjs/swagger`'s `OpenAPIObject` (which has no index
+ * signature of its own) as a generic constraint. This type only asserts the
+ * one field `applyDocfyMetadata` actually needs to reason about.
+ */
+interface OpenApiDocumentLike {
+  paths?: unknown;
+}
+
+/**
  * Merges the build-time metadata produced by the `nestjs-docfy` CLI plugin
  * (`nest-cli.json`'s `compilerOptions.plugins`) into an already-built OpenAPI
  * document. Call this right after `SwaggerModule.createDocument()` — the
@@ -22,11 +35,16 @@ export interface ApplyDocfyMetadataOptions {
  * This is the path that actually works under NestJS CLI's `webpack: true`
  * build mode — see the README's "Not supported: webpack: true" section for
  * why `DocfyModule`'s `require.cache`-based discovery structurally cannot.
+ *
+ * Generic over the input document type so it returns exactly what was
+ * passed in (e.g. `@nestjs/swagger`'s `OpenAPIObject`, as returned by
+ * `SwaggerModule.createDocument()`) instead of the loosely-typed
+ * `OpenApiDocument` shape `mergeSpecPatch` uses internally.
  */
-export function applyDocfyMetadata(
-  document: OpenApiDocument,
+export function applyDocfyMetadata<T extends OpenApiDocumentLike>(
+  document: T,
   options: ApplyDocfyMetadataOptions = {},
-): OpenApiDocument {
+): T {
   const metadataPath =
     options.metadataPath ?? path.join(path.dirname(require.main?.filename ?? process.cwd()), DOCFY_METADATA_FILENAME);
 
@@ -52,5 +70,5 @@ export function applyDocfyMetadata(
     return document;
   }
 
-  return mergeSpecPatch(document, patch).document;
+  return mergeSpecPatch(document as unknown as OpenApiDocument, patch).document as unknown as T;
 }

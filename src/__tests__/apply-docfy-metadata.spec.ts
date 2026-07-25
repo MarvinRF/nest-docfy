@@ -28,8 +28,9 @@ describe('applyDocfyMetadata()', () => {
     fs.writeFileSync(metadataPath, JSON.stringify({ '/users': { get: { summary: 'List users' } } }), 'utf8');
 
     const result = applyDocfyMetadata(baseDocument, { metadataPath });
-    expect((result.paths!['/users'].get as { summary?: string }).summary).toBe('List users');
-    expect(result.paths!['/users'].get.operationId).toBe('findAll');
+    const resultPaths = result.paths as Record<string, Record<string, { summary?: string; operationId?: string }>>;
+    expect(resultPaths['/users'].get.summary).toBe('List users');
+    expect(resultPaths['/users'].get.operationId).toBe('findAll');
   });
 
   it('warns and returns the document unchanged when the metadata file is missing', () => {
