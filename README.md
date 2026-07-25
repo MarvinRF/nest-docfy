@@ -1,11 +1,8 @@
 <p align="center">
-  <a href="http://nestjs.com"><img alt="Nest Logo" src="https://nestjs.com/img/logo-small.svg" width="120"></a>
+  <img alt="nestjs-docfy banner" src="./assets/banner.png" width="100%">
 </p>
 
-<h1 align="center">
-  nestjs-docfy
-</h1>
-
+[![CI](https://github.com/MarvinRF/nest-docfy/actions/workflows/ci.yml/badge.svg)](https://github.com/MarvinRF/nest-docfy/actions/workflows/ci.yml)
 [![NPM version](https://img.shields.io/npm/v/nestjs-docfy.svg)](https://www.npmjs.com/package/nestjs-docfy)
 [![NPM downloads](https://img.shields.io/npm/dw/nestjs-docfy.svg)](https://www.npmjs.com/package/nestjs-docfy)
 [![GitHub last commit](https://img.shields.io/github/last-commit/MarvinRF/nest-docfy)](https://github.com/MarvinRF/nest-docfy/commits/main)
@@ -13,6 +10,8 @@
 [![License: MIT](https://img.shields.io/badge/license-MIT-blue.svg)](https://github.com/MarvinRF/nest-docfy/blob/main/LICENSE)
 
 Keep your NestJS controllers clean. Swagger documentation lives in a dedicated companion file — by naming convention, zero boilerplate.
+
+📖 **[Full documentation](https://www.nestdocfy.com/)**
 
 ## Table of contents
 
@@ -36,12 +35,14 @@ Keep your NestJS controllers clean. Swagger documentation lives in a dedicated c
   - [@WithDocs()](#withdocs)
   - [docs()](#docscontrollerclass-config)
   - [attachTagGroups()](#attachtaggroupsdocument)
+  - [applyDocfyMetadata()](#applydocfymetadatadocument-options)
   - [DocfyUiModule.setup()](#docfyuimodulesetupmountpath-app-options)
 - [Interface-typed DTOs](#interface-typed-dtos)
 - [class-validator inference](#class-validator-inference)
 - [@HttpCode() support](#httpcode-support)
 - [Tag groups (x-tagGroups)](#tag-groups-x-taggroups)
 - [File naming convention](#file-naming-convention)
+  - [webpack: true build mode](#webpack-true-build-mode)
 - [Testing](#testing)
 - [How it works](#how-it-works)
 - [License](#license)
@@ -270,13 +271,13 @@ Verify that every controller is fully documented before merging. Exits with code
 npx nestjs-docfy check [options]
 ```
 
-| Option              | Default                   | Description                                 |
-| ------------------- | ------------------------- | ------------------------------------------- |
-| `--root <path>`     | `.`                       | Project root directory                      |
-| `--tsconfig <path>` | auto-detected             | Path to `tsconfig.json`                     |
-| `--pattern <glob>`  | `**/*.controller.ts`      | Glob pattern to find controllers            |
-| `--format <format>` | `ts`                      | Docs file format to look for: `ts` or `js`  |
-| `--quiet`           | `false`                   | Suppress all output except errors           |
+| Option              | Default              | Description                                |
+| ------------------- | -------------------- | ------------------------------------------ |
+| `--root <path>`     | `.`                  | Project root directory                     |
+| `--tsconfig <path>` | auto-detected        | Path to `tsconfig.json`                    |
+| `--pattern <glob>`  | `**/*.controller.ts` | Glob pattern to find controllers           |
+| `--format <format>` | `ts`                 | Docs file format to look for: `ts` or `js` |
+| `--quiet`           | `false`              | Suppress all output except errors          |
 
 **What it checks:**
 
@@ -424,21 +425,21 @@ Or as an npm script:
 
 Patches an **already-built** OpenAPI document with every controller's companion docs file, entirely via static analysis (`ts-morph`) — no `require()` of any docs file, no decorators applied to any class, no dependency on a live class reference matching the one the running app actually uses.
 
-This is the workaround for the one thing `DocfyModule`'s runtime pipeline structurally cannot do: work under NestJS CLI's `webpack: true` build mode (see "Not supported" under [File naming convention](#file-naming-convention) for why). `patch-spec` sidesteps that entirely by matching on **path + HTTP method**, computed the same way `check`/`coverage`/`lint` already do, instead of needing the live controller class.
+This is a manual, CI-driven way to work around the one thing `DocfyModule`'s runtime pipeline structurally cannot do: work under NestJS CLI's `webpack: true` build mode (see [`webpack: true` build mode](#webpack-true-build-mode) for why, and for the **CLI plugin**, which does the same analysis automatically on every build instead of a separate step). `patch-spec` sidesteps the webpack wall by matching on **path + HTTP method**, computed the same way `check`/`coverage`/`lint` already do, instead of needing the live controller class.
 
 ```bash
 npx nestjs-docfy patch-spec --spec <path-or-url> [options]
 ```
 
-| Option | Default | Description |
-| --- | --- | --- |
-| `--spec <path\|url>` | *(required)* | A local `openapi.json`, or a URL (e.g. a running app's `/api-json`) |
-| `--out <path>` | stdout | Where to write the patched document |
-| `--root <path>` | `.` | Project root directory |
-| `--tsconfig <path>` | auto-detected | Path to `tsconfig.json` |
-| `--pattern <glob>` | `**/*.controller.ts` | Glob pattern to find controllers |
-| `--format <format>` | `ts` | Docs file format to look for: `ts` or `js` |
-| `--quiet` | `false` | Suppress all output except errors |
+| Option               | Default              | Description                                                         |
+| -------------------- | -------------------- | ------------------------------------------------------------------- |
+| `--spec <path\|url>` | _(required)_         | A local `openapi.json`, or a URL (e.g. a running app's `/api-json`) |
+| `--out <path>`       | stdout               | Where to write the patched document                                 |
+| `--root <path>`      | `.`                  | Project root directory                                              |
+| `--tsconfig <path>`  | auto-detected        | Path to `tsconfig.json`                                             |
+| `--pattern <glob>`   | `**/*.controller.ts` | Glob pattern to find controllers                                    |
+| `--format <format>`  | `ts`                 | Docs file format to look for: `ts` or `js`                          |
+| `--quiet`            | `false`              | Suppress all output except errors                                   |
 
 ```bash
 # Patch a running app's served document
@@ -452,12 +453,14 @@ npx nestjs-docfy patch-spec --spec dist/openapi.json --out dist/openapi.json
 
 - `ApiTags` → unioned into `tags` (never drops tags the base document already had)
 - `ApiOperation({ summary, description, deprecated })` → overwrites those fields
-- `ApiResponse({ status, description, schema })` → merged per status code (other status codes untouched); when no `schema`/`type` is given, falls back to the method's own resolved return type — same DTO/class-validator/interface inference `generate` already does
-- `ApiBody({ schema })` → sets `requestBody`, with the same return-type-style fallback to the `@Body()` parameter's resolved type
+- `ApiResponse({ status, description, schema, example, examples })` → merged per status code (other status codes untouched); when no `schema`/`type` is given, falls back to the method's own resolved return type — same DTO/class-validator/interface inference `generate` already does, including a `oneOf` of `$ref`s when the return type is a union of ≥2 named DTOs/entities (e.g. `Promise<UserDto | AdminDto>`)
+- `ApiBody({ schema, example, examples })` → sets `requestBody`, with the same return-type-style fallback to the `@Body()` parameter's resolved type, including the same union → `oneOf` handling
 - `ApiBearerAuth()` → appended to `security`
-- `ApiParam` / `ApiQuery` / `ApiHeader` → appended to `parameters`, deduplicated by name + location
+- `ApiParam` / `ApiQuery` / `ApiHeader` → appended to `parameters`, deduplicated by name + location, including an `enum` array when one is given as an array literal (`enum: ['a', 'b']`) or a reference to a TS `enum` (`enum: Role`) — the schema's `type` is inferred as `number` when every resolved value is numeric, `string` otherwise
 
-**What this does *not* do** (yet — this command is intentionally scoped, not a full reimplementation of `@nestjs/swagger`'s decorator semantics): enums, `oneOf`/`anyOf`, examples, links, callbacks, and any decorator argument that isn't a literal (a variable, a function call, a spread) are left alone rather than guessed at — better to leave a field as the base document already had it than patch in something wrong. Routes a docs file documents that don't exist in `--spec` are reported as warnings, not silently dropped or errored on.
+`example`/`examples` (and `schema`) are only applied when every value inside them is a literal — if even one nested value is a variable, function call, or other non-literal expression, the whole field is left out rather than risk leaking an internal "unresolved" marker into the document as if it were real data.
+
+**What this does _not_ do** (yet — this command is intentionally scoped, not a full reimplementation of `@nestjs/swagger`'s decorator semantics): `anyOf` (no TS construct maps onto "any of" the way a union type naturally maps onto `oneOf`), `links`/`callbacks` (`@nestjs/swagger` itself has no decorator option for either, so there's nothing in a `.docs.ts` file to read), and any decorator argument that isn't a literal (a variable, a function call, a spread) are left alone rather than guessed at — better to leave a field as the base document already had it than patch in something wrong. A union return type or `@Body()` payload only becomes a `oneOf` when _every_ branch resolves to a named DTO/entity — a partial guess is avoided by leaving the field alone entirely (falling back to no schema, same as an unresolvable type) if even one branch doesn't resolve. Routes a docs file documents that don't exist in `--spec` are reported as warnings, not silently dropped or errored on.
 
 ## API reference
 
@@ -517,32 +520,53 @@ If a method key does not exist on the controller at runtime, a warning is logged
 
 Adds the `x-tagGroups` extension to a Swagger document, built from groups registered via `docs({ group, tags })`. Call after `SwaggerModule.createDocument()` and before `SwaggerModule.setup()`. Returns the document unchanged if no groups were registered. See [Tag groups](#tag-groups-x-taggroups) for a full example.
 
+### `applyDocfyMetadata(document, options?)`
+
+Merges the build-time metadata produced by the `nestjs-docfy` [CLI plugin](#webpack-true-build-mode) into an already-built OpenAPI document. Call after `SwaggerModule.createDocument()`, same as `attachTagGroups()`. This is the automatic, `webpack: true`-compatible alternative to manually running `patch-spec`.
+
+```ts
+import { applyDocfyMetadata } from "nestjs-docfy";
+
+const document = SwaggerModule.createDocument(app, config);
+SwaggerModule.setup("api", app, applyDocfyMetadata(document));
+```
+
+| Option         | Type      | Default                                              | Description                                                            |
+| -------------- | --------- | ---------------------------------------------------- | ---------------------------------------------------------------------- |
+| `metadataPath` | `string`  | `docfy-metadata.json` next to the running entry file | Where to read the plugin-generated metadata from.                      |
+| `strict`       | `boolean` | `false`                                              | Throw instead of warning when the metadata file is missing or invalid. |
+
+If the metadata file isn't found (e.g. the plugin isn't registered in `nest-cli.json`), it warns and returns the document unchanged — same fail-open default as `DocfyModule.forRoot()`.
+
 ### `DocfyUiModule.setup(mountPath, app, options?)`
 
 Serves [`docfy-ui`](https://www.npmjs.com/package/docfy-ui) — the AI-first documentation UI companion to this package — at `mountPath`, the same role `SwaggerModule.setup()` + `swagger-ui-express` play for raw Swagger UI. Works on both Express (`@nestjs/platform-express`) and Fastify (`@nestjs/platform-fastify`) apps. On Fastify, static asset serving needs the optional peer dependency [`@fastify/static`](https://www.npmjs.com/package/@fastify/static) (`npm install @fastify/static`) — the same package `@nestjs/swagger` itself relies on for Fastify Swagger UI support.
 
 ```ts
-import { NestFactory } from '@nestjs/core';
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { DocfyUiModule } from 'nestjs-docfy';
+import { NestFactory } from "@nestjs/core";
+import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
+import { DocfyUiModule } from "nestjs-docfy";
 
 const app = await NestFactory.create(AppModule);
 
-DocfyUiModule.setup('/docs', app); // before SwaggerModule.setup — see staticSpecPath below
+DocfyUiModule.setup("/docs", app); // before SwaggerModule.setup — see staticSpecPath below
 
-const document = SwaggerModule.createDocument(app, new DocumentBuilder().build());
-SwaggerModule.setup('api', app, document); // exposes /api-json, which docfy-ui fetches by default
+const document = SwaggerModule.createDocument(
+  app,
+  new DocumentBuilder().build(),
+);
+SwaggerModule.setup("api", app, document); // exposes /api-json, which docfy-ui fetches by default
 
 await app.listen(3000);
 ```
 
 Visit `/docs` — no further configuration needed, since `docfy-ui` fetches `/api-json` same-origin by default.
 
-| Option | Type | Default | Description |
-| --- | --- | --- | --- |
-| `staticSpecPath` | `string` | — | Path to a pre-built OpenAPI JSON file, served at `/api-json` *instead of* the app's live one. |
+| Option           | Type     | Default | Description                                                                                   |
+| ---------------- | -------- | ------- | --------------------------------------------------------------------------------------------- |
+| `staticSpecPath` | `string` | —       | Path to a pre-built OpenAPI JSON file, served at `/api-json` _instead of_ the app's live one. |
 
-**`staticSpecPath` — required if your app builds with `"webpack": true`.** `DocfyModule`'s runtime metadata pipeline cannot apply docs files there (see [Not supported: webpack: true](#not-supported-nestjs-clis-webpack-true-build-mode)), so the live `/api-json` will be missing everything docs files would otherwise add. Generate a patched document ahead of time —
+**`staticSpecPath` — needed if your app builds with `"webpack": true`, and you're not using the [CLI plugin](#webpack-true-build-mode).** `DocfyModule`'s runtime metadata pipeline cannot apply docs files there, so the live `/api-json` will be missing everything docs files would otherwise add. Generate a patched document ahead of time —
 
 ```bash
 npx nestjs-docfy patch-spec --spec http://localhost:3000/api-json --out openapi.patched.json
@@ -551,7 +575,7 @@ npx nestjs-docfy patch-spec --spec http://localhost:3000/api-json --out openapi.
 — and serve that instead:
 
 ```ts
-DocfyUiModule.setup('/docs', app, { staticSpecPath: './openapi.patched.json' });
+DocfyUiModule.setup("/docs", app, { staticSpecPath: "./openapi.patched.json" });
 ```
 
 Call this **before** `SwaggerModule.setup()`: Express resolves routes in registration order, so the static, patched document takes precedence over the live one for any request to `/api-json`.
@@ -597,7 +621,7 @@ When a DTO class uses `class-validator` decorators and does **not** already have
 
 ```ts
 // create-user.dto.ts
-import { IsString, IsEmail, MinLength, IsOptional } from 'class-validator';
+import { IsString, IsEmail, MinLength, IsOptional } from "class-validator";
 
 export class CreateUserDto {
   @IsString()
@@ -662,16 +686,16 @@ Pass `group` and `tags` to `docs()` to organize controllers under logical sectio
 ```ts
 // users.controller.docs.ts
 docs(UsersController, {
-  classDecorators: [ApiTags('users')],
-  group: 'Administration',
-  tags: ['users'],
+  classDecorators: [ApiTags("users")],
+  group: "Administration",
+  tags: ["users"],
 });
 
 // roles.controller.docs.ts
 docs(RolesController, {
-  classDecorators: [ApiTags('roles')],
-  group: 'Administration',
-  tags: ['roles'],
+  classDecorators: [ApiTags("roles")],
+  group: "Administration",
+  tags: ["roles"],
 });
 ```
 
@@ -681,13 +705,13 @@ To actually attach the groups to the generated document, call `attachTagGroups()
 
 ```ts
 // main.ts
-import { SwaggerModule, DocumentBuilder } from '@nestjs/swagger';
-import { attachTagGroups } from 'nestjs-docfy';
+import { SwaggerModule, DocumentBuilder } from "@nestjs/swagger";
+import { attachTagGroups } from "nestjs-docfy";
 
-const config = new DocumentBuilder().setTitle('My API').build();
+const config = new DocumentBuilder().setTitle("My API").build();
 const document = SwaggerModule.createDocument(app, config);
 
-SwaggerModule.setup('api', app, attachTagGroups(document));
+SwaggerModule.setup("api", app, attachTagGroups(document));
 ```
 
 Generated extension:
@@ -713,15 +737,47 @@ Discovery is automatic. `DocfyModule` locates each controller's source file via 
 
 > **Barrel re-exports**: if your controller is also exported from an `index.ts` barrel, make sure the class is exported directly from its own module file. `nestjs-docfy` prefers `.controller.ts` over barrel files.
 
-### Not supported: NestJS CLI's `webpack: true` build mode
+### `webpack: true` build mode
 
-If your `nest-cli.json` has `"webpack": true` under `compilerOptions` — the documented default for monorepos with multiple apps — `nestjs-docfy` **will not work**, and there is no configuration that makes it work. This is architectural, not a bug to be patched around:
+If your `nest-cli.json` has `"webpack": true` under `compilerOptions` — the documented default for monorepos with multiple apps — `DocfyModule`'s **runtime** pipeline (the `@WithDocs()` + `require.cache` discovery described above) will not work, and there is no configuration that makes it work. This is architectural, not a bug to be patched around:
 
 - Webpack inlines every module into one bundle file and never populates Node's `require.cache` with an entry per original source file, which is what the discovery mechanism above depends on. You'll see `Could not locate source file for X` for every `@WithDocs()` controller.
 - Even if that lookup is worked around (e.g. by recovering the original path from the bundle's source map, sidestepping `require.cache` entirely), there's a second, unavoidable wall: a docs file required from outside the bundle creates a structurally different class object than the one the running app actually uses internally. Decorating that fresh copy has no effect on the document `SwaggerModule.createDocument()` actually serves — silently, with no error. This path-recovery layer was built and tested before discovering this; it isn't shipped, because "looks like it loaded, does nothing" is worse than the current loud, accurate warning.
 - The only way around this would be for the controller's own file to import its `.docs.ts` companion (forcing webpack to bundle them together) — which defeats the entire point of the convention: zero coupling between a controller and its documentation.
 
-**If you need `nestjs-docfy`, disable webpack bundling**: remove `"webpack": true` (or set it to `false`) in `nest-cli.json`. Under `nest build`'s default `tsc`-based compilation, every source file — including each `*.controller.docs.ts` — gets compiled to its own `.js` file in `dist/`, so `require.cache` naturally has one entry per file and discovery works exactly as documented above, no special configuration needed.
+There are two ways to get full docs under `webpack: true`, in order of preference:
+
+#### 1. The CLI plugin (recommended) — fixes it at the root, automatically, on every build
+
+Register `nestjs-docfy` as a NestJS CLI compiler plugin in `nest-cli.json`:
+
+```json
+{
+  "compilerOptions": {
+    "webpack": true,
+    "plugins": ["nestjs-docfy"]
+  }
+}
+```
+
+This is the same mechanism `@nestjs/swagger`'s own CLI plugin uses to work under `webpack: true` — it's why `@ApiProperty()` isn't required on every DTO property even in a webpack build. The Nest CLI feeds a TypeScript compiler-plugin hook (`compilerOptions.plugins`) into both the `tsc` and the `webpack` (`ts-loader`) builder identically. `nestjs-docfy`'s plugin doesn't rewrite any decorator syntax or touch the AST at all — on every compilation it re-runs the exact same static analysis `generate`/`check`/`patch-spec` already do (via `ts-morph`, against the source tree, not the bundle) and writes the resulting patch to `docfy-metadata.json` next to your build output. There's no `require.cache` involved and no bundled-class-identity problem, because it never needs the running app to compute anything.
+
+Then, right after `SwaggerModule.createDocument()`, merge that file into the document:
+
+```ts
+import { applyDocfyMetadata } from "nestjs-docfy";
+
+const document = SwaggerModule.createDocument(app, config);
+SwaggerModule.setup("api", app, applyDocfyMetadata(document));
+```
+
+`applyDocfyMetadata()` reads `docfy-metadata.json` from next to your compiled entry file by default — pass `{ metadataPath }` to point somewhere else. If the file is missing (e.g. the plugin isn't registered), it warns and returns the document unchanged; pass `{ strict: true }` to throw instead, the same `strict` convention `DocfyModule.forRoot()` already uses.
+
+#### 2. `patch-spec` (manual, CI-driven) — the same analysis, run as a separate step
+
+If you'd rather not add a compiler plugin (e.g. a build pipeline that isn't the Nest CLI, or a stricter policy about what runs during compilation), [`patch-spec`](#cli--patch-spec) computes the identical patch by hand against an already-built document — see that section for usage. This was the only option before the CLI plugin existed, and remains useful for one-off patching (e.g. patching a document fetched from a _different_ running instance than the one being built).
+
+Disabling webpack entirely (`"webpack": false` or removing the key) also works, if you don't need it for another reason: under `nest build`'s default `tsc`-based compilation, every source file — including each `*.controller.docs.ts` — gets compiled to its own `.js` file in `dist/`, so `require.cache` naturally has one entry per file and `DocfyModule`'s runtime discovery works exactly as documented above, no special configuration needed.
 
 ## Testing
 
