@@ -1,24 +1,24 @@
 // Global registry of classes decorated with @WithDocs().
 // Populated at class-definition time; consumed by DocfyModule.forRoot().
-const registry = new Set<Function>();
+const registry = new Set<NewableFunction>();
 
 // Raw `Error().stack` captured at the exact line `@WithDocs()` was applied,
 // keyed by class. Used as a fallback to locate the controller's source file
 // when require.cache has no entry for it (e.g. the app is bundled — see
 // resolve-source-from-stack.ts for why that happens and how this is used).
-const callSites = new WeakMap<Function, string>();
+const callSites = new WeakMap<NewableFunction, string>();
 
 export const DocfyRegistry = {
-  add(target: Function, callSiteStack?: string): void {
+  add(target: NewableFunction, callSiteStack?: string): void {
     registry.add(target);
     if (callSiteStack) callSites.set(target, callSiteStack);
   },
 
-  getAll(): ReadonlySet<Function> {
+  getAll(): ReadonlySet<NewableFunction> {
     return registry;
   },
 
-  getCallSite(target: Function): string | undefined {
+  getCallSite(target: NewableFunction): string | undefined {
     return callSites.get(target);
   },
 

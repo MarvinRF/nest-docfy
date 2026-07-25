@@ -1,4 +1,4 @@
-import { Project, SyntaxKind, ObjectLiteralExpression, ArrayLiteralExpression } from 'ts-morph';
+import { Project, SyntaxKind, ObjectLiteralExpression } from 'ts-morph';
 import type { ControllerInfo } from './extract-methods';
 
 export interface MergeResult {

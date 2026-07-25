@@ -2,7 +2,7 @@ import 'reflect-metadata';
 import { DocfyModule } from '../docfy.module';
 import { DocfyRegistry } from '../registry';
 
-function makeCache(filename: string, target: Function) {
+function makeCache(filename: string, target: NewableFunction) {
   return () => ({ [filename]: { exports: { [target.name]: target } } });
 }
 

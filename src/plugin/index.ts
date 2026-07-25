@@ -66,7 +66,6 @@ export function before(
     // A build-time analysis failure shouldn't be silently swallowed, but it
     // also shouldn't fail the app's entire build — same "loud warning, not a
     // crash" philosophy DocfyModule already follows for a missing docs file.
-    // eslint-disable-next-line no-console
     console.warn(
       `[nestjs-docfy] Failed to generate build-time metadata: ${err instanceof Error ? err.message : String(err)}`,
     );

@@ -1,0 +1,4 @@
+node_modules
+dist
+coverage
+src/__tests__/cli/fixtures

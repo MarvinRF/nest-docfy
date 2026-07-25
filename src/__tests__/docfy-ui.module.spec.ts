@@ -219,6 +219,7 @@ describe('DocfyUiModule.setup() — Fastify', () => {
       throw new Error("Cannot find module '@fastify/static'");
     });
 
+    // eslint-disable-next-line @typescript-eslint/no-require-imports -- needs a fresh module instance after jest.doMock, a static import wouldn't re-evaluate
     const { DocfyUiModule: IsolatedDocfyUiModule } = require('../docfy-ui.module');
     const { app } = makeRecordingApp('fastify');
 

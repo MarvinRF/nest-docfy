@@ -1,4 +1,3 @@
-import path from 'path';
 import { renderDocsFile, relativeImport, inferSummary } from '../../cli/generate-file';
 import type { ControllerInfo, InlineSchema } from '../../cli/extract-methods';
 

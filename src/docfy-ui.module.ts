@@ -57,7 +57,7 @@ export interface DocfyUiSetupOptions {
 
 function loadFastifyStatic(): unknown {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     return require('@fastify/static');
   } catch {
     throw new Error(

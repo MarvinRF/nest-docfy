@@ -69,7 +69,6 @@ describe('mergeDocsFile()', () => {
   });
 
   it('returns null for unparseable content', () => {
-    const result = mergeDocsFile('this is not valid typescript }{}{', makeCtrl(['findAll']));
     // ts-morph may still parse it (permissive), so we only assert no throw
     expect(() => mergeDocsFile('}{', makeCtrl(['findAll']))).not.toThrow();
   });

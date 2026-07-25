@@ -26,7 +26,7 @@ type CacheSnapshot = Record<string, { exports: Record<string, unknown> } | undef
  * that bundle's source map (emitted by default by the webpack build).
  */
 export function resolveDocsPath(
-  controllerClass: Function,
+  controllerClass: NewableFunction,
   readCache: () => CacheSnapshot = () => require.cache as unknown as CacheSnapshot,
   callSiteStack?: string,
 ): string | null {
@@ -56,7 +56,7 @@ function resolveFromCallSite(callSiteStack: string | undefined): string | null {
  * so that a barrel re-export (index.ts) is ranked below the actual source file.
  * Both are valid cache entries — we want the most specific one.
  */
-function findFileInCache(target: Function, cache: CacheSnapshot): string | null {
+function findFileInCache(target: NewableFunction, cache: CacheSnapshot): string | null {
   const candidates: string[] = [];
 
   for (const [filename, mod] of Object.entries(cache)) {

@@ -63,7 +63,7 @@ export class DocfyModule {
           // The docs file simply doesn't exist — allowed unless strict mode
           const message =
             `No docs file found for ${controllerClass.name}. Expected: ${docsPath}`;
-          if (strict) throw new Error(`[nestjs-docfy] ${message}`);
+          if (strict) throw new Error(`[nestjs-docfy] ${message}`, { cause: err });
           DocfyModule.logger.warn(message);
         } else {
           // Unexpected error (syntax error inside the docs file, missing dependency, etc.)

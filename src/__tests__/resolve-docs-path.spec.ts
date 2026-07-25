@@ -4,7 +4,7 @@ import * as path from 'path';
 import { SourceMapGenerator } from 'source-map';
 import { resolveDocsPath } from '../resolve-docs-path';
 
-function makeCache(filename: string, target: Function, exportKey = target.name) {
+function makeCache(filename: string, target: NewableFunction, exportKey = target.name) {
   return () => ({ [filename]: { exports: { [exportKey]: target } } });
 }
 

@@ -21,7 +21,7 @@ program
   .name('nestjs-docfy')
   .description('Generate companion docs files for NestJS controllers')
   .version(
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
+    // eslint-disable-next-line @typescript-eslint/no-require-imports
     (require('../../package.json') as { version: string }).version,
     '-v, --version',
   );
@@ -444,7 +444,6 @@ program
 async function readSpecSource(source: string, root: string): Promise<OpenApiDocument> {
   let text: string;
   if (/^https?:\/\//.test(source)) {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const fetchFn = (globalThis as any).fetch as undefined | ((url: string) => Promise<{ ok: boolean; status: number; text(): Promise<string> }>);
     if (!fetchFn) {
       throw new CliError('Fetching --spec from a URL requires a Node version with global fetch (Node 18+).', CliExitCode.Fatal);

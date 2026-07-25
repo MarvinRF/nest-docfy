@@ -29,7 +29,7 @@ export function WithDocs(): ClassDecorator {
   // (e.g. the app is bundled by webpack; see DocfyModule's README section).
   const callSiteStack = new Error().stack;
 
-  return (target: Function) => {
+  return (target: NewableFunction) => {
     SetMetadata(DOCFY_MARKER, true)(target);
     DocfyRegistry.add(target, callSiteStack);
   };

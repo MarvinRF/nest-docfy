@@ -38,7 +38,6 @@ export function applyDocfyMetadata(
       `[nestjs-docfy] No build-time metadata found at ${metadataPath}. Did you register the CLI plugin in ` +
       'nest-cli.json (`"compilerOptions": { "plugins": ["nestjs-docfy"] }`)?';
     if (options.strict) throw new Error(message);
-    // eslint-disable-next-line no-console
     console.warn(message);
     return document;
   }
@@ -48,8 +47,7 @@ export function applyDocfyMetadata(
     patch = JSON.parse(raw) as SpecPatch;
   } catch (err) {
     const message = `[nestjs-docfy] Failed to parse build-time metadata at ${metadataPath}: ${err instanceof Error ? err.message : String(err)}`;
-    if (options.strict) throw new Error(message);
-    // eslint-disable-next-line no-console
+    if (options.strict) throw new Error(message, { cause: err });
     console.warn(message);
     return document;
   }

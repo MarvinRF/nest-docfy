@@ -1,7 +1,6 @@
 import path from 'path';
 import { resolveTsconfig } from '../../cli/resolve-tsconfig';
 import { ConfigNotFoundError } from '../../cli/errors';
-import { PathTraversalError } from '../../cli/errors';
 
 const FIXTURES = path.join(__dirname, 'fixtures');
 const fix = (name: string) => path.join(FIXTURES, name);

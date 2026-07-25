@@ -25,7 +25,6 @@ describe('watchProject()', () => {
   });
 
   it('does not start watching directories outside root', () => {
-    const outsideRoot = '/tmp/outside-docfy-test';
     // watchProject should silently refuse to watch the outside dir
     // (assertWithinRoot will block it). We verify no throw is raised.
     expect(() => {
