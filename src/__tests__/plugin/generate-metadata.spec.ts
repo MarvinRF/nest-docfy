@@ -96,6 +96,52 @@ describe('generateDocfyMetadata()', () => {
     expect(result.patchedOperationCount).toBe(1);
   });
 
+  it('resolves an enum imported from another file into the docs file (real-world case, not just same-file)', () => {
+    // Regression test for the exact scenario examples/basic-nest-app hit:
+    // the enum lives in its own file (entities/role.enum.ts, say), not
+    // inline in the docs file — generateDocfyMetadata reuses the same
+    // scanApp() project across all docs files precisely so this resolves.
+    writeFile(tmpDir, 'src/role.enum.ts', `export enum Role { Member = 'member', Admin = 'admin' }`);
+    writeFile(
+      tmpDir,
+      'src/users.controller.ts',
+      `
+      function Controller(path?: string) { return (target: any) => {}; }
+      function Get(path?: string) { return (target: any, key?: any, desc?: any) => {}; }
+      function WithDocs() { return (target: any) => {}; }
+
+      @WithDocs()
+      @Controller('users')
+      export class UsersController {
+        @Get()
+        findAll(): string[] { return []; }
+      }
+      `,
+    );
+    writeFile(
+      tmpDir,
+      'src/users.controller.docs.ts',
+      `
+      function docs(ctrl: any, config: any) {}
+      function ApiQuery(opts: any) { return opts; }
+      import { Role } from './role.enum';
+      docs(null, {
+        classDecorators: [],
+        methods: { findAll: [ApiQuery({ name: 'role', enum: Role })] },
+      });
+      `,
+    );
+
+    const result = generateDocfyMetadata({
+      tsConfigFilePath: path.join(tmpDir, 'tsconfig.json'),
+      projectRoot: tmpDir,
+      outDir: path.join(tmpDir, 'dist'),
+    });
+
+    const written = JSON.parse(fs.readFileSync(result.outFile, 'utf8'));
+    expect(written['/users'].get.parameters[0].schema.enum).toEqual(['member', 'admin']);
+  });
+
   it('creates the output directory if it does not exist yet', () => {
     writeFile(
       tmpDir,

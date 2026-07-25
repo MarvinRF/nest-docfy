@@ -8,6 +8,16 @@ import type { ProjectApp } from './project-types';
 export interface ScanResult {
   controllers: ControllerInfo[];
   errors: ScanError[];
+  /**
+   * Maps each returned controller's absolute file path to the ts-morph
+   * `Project` that scanned it — that project already has every file the
+   * app's tsconfig matches loaded (see the `skipAddingFilesFromTsConfig:
+   * false` below), so passing it through to `computeSpecPatch`/
+   * `extractDocsConfig` lets a docs file's cross-file symbol references
+   * (e.g. an imported TS `enum`) resolve for real, instead of being parsed
+   * in total isolation with nothing else in scope.
+   */
+  projectsByControllerPath: Map<string, Project>;
 }
 
 export interface ScanError {
@@ -75,7 +85,7 @@ export function scanApp(
       file: app.tsconfig,
       message: `Failed to load tsconfig: ${err instanceof Error ? err.message : String(err)}`,
     });
-    return { controllers, errors };
+    return { controllers, errors, projectsByControllerPath: new Map() };
   }
 
   // Determine which source files to scan
@@ -160,7 +170,10 @@ export function scanApp(
     }
   }
 
-  return { controllers, errors };
+  const projectsByControllerPath = new Map<string, Project>();
+  for (const ctrl of controllers) projectsByControllerPath.set(ctrl.filePath, project);
+
+  return { controllers, errors, projectsByControllerPath };
 }
 
 /**
@@ -174,12 +187,16 @@ export function scanAllApps(
 ): ScanResult {
   const allControllers: ControllerInfo[] = [];
   const allErrors: ScanError[] = [];
+  const projectsByControllerPath = new Map<string, Project>();
 
   for (const app of apps) {
     const result = scanApp(app, projectRoot, patternOverride, format);
     allControllers.push(...result.controllers);
     allErrors.push(...result.errors);
+    for (const [filePath, project] of result.projectsByControllerPath) {
+      projectsByControllerPath.set(filePath, project);
+    }
   }
 
-  return { controllers: allControllers, errors: allErrors };
+  return { controllers: allControllers, errors: allErrors, projectsByControllerPath };
 }

@@ -46,7 +46,11 @@ export function generateDocfyMetadata(options: GenerateMetadataOptions): Generat
     controllerGlob: options.controllerGlob ?? '**/*.controller.ts',
   };
 
-  const { controllers, errors: scanErrors } = scanApp(app, options.projectRoot, options.controllerGlob, 'ts');
+  const {
+    controllers,
+    errors: scanErrors,
+    projectsByControllerPath,
+  } = scanApp(app, options.projectRoot, options.controllerGlob, 'ts');
   const { patch, controllersWithoutDocs, unparseableDocsFiles } = computeSpecPatch(
     controllers,
     'ts',
@@ -57,6 +61,7 @@ export function generateDocfyMetadata(options: GenerateMetadataOptions): Generat
         return null;
       }
     },
+    projectsByControllerPath,
   );
 
   fs.mkdirSync(options.outDir, { recursive: true });

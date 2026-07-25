@@ -531,13 +531,19 @@ program
         log('error', `${err.file}: ${err.message}`);
       }
 
-      const result = computePatchedDocument(document, scanResult.controllers, options.format, (absPath) => {
-        try {
-          return fs.readFileSync(absPath, 'utf8');
-        } catch {
-          return null;
-        }
-      });
+      const result = computePatchedDocument(
+        document,
+        scanResult.controllers,
+        options.format,
+        (absPath) => {
+          try {
+            return fs.readFileSync(absPath, 'utf8');
+          } catch {
+            return null;
+          }
+        },
+        scanResult.projectsByControllerPath,
+      );
 
       log('success', `Patched ${result.patchedOperationCount} operation(s).`);
       if (result.controllersWithoutDocs.length > 0) {

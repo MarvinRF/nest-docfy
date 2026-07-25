@@ -1,3 +1,4 @@
+import type { Project } from 'ts-morph';
 import { deriveDocsFilePath } from './scan-controllers';
 import { extractDocsConfig } from './extract-docs-config';
 import { buildOpenApiPatch, SpecPatch, OperationPatch } from './build-openapi-patch';
@@ -61,11 +62,20 @@ function mergePatches(a: SpecPatch, b: SpecPatch): SpecPatch {
  *
  * `readDocsFile` is injected so this function stays pure/testable — real
  * callers supply `fs.readFileSync`.
+ *
+ * `projectsByControllerPath` is optional and, when given (see
+ * `ScanResult.projectsByControllerPath`), lets each docs file be parsed
+ * inside the same real, disk-backed project that scanned its controller —
+ * necessary for a decorator argument that references a symbol imported from
+ * another file (e.g. `enum: Role`) to resolve at all. Without it, docs files
+ * are parsed in isolation and any such cross-file reference silently
+ * resolves to nothing.
  */
 export function computeSpecPatch(
   controllers: ControllerInfo[],
   format: 'ts' | 'js',
   readDocsFile: (absolutePath: string) => string | null,
+  projectsByControllerPath?: Map<string, Project>,
 ): SpecPatchComputation {
   let patch: SpecPatch = {};
   const controllersWithoutDocs: string[] = [];
@@ -84,7 +94,8 @@ export function computeSpecPatch(
       continue;
     }
 
-    const config = extractDocsConfig(content);
+    const project = projectsByControllerPath?.get(ctrl.filePath);
+    const config = extractDocsConfig(content, project ? { project, absolutePath: docsPath } : undefined);
     if (!config) {
       unparseableDocsFiles.push(docsPath);
       continue;
@@ -112,8 +123,14 @@ export function computePatchedDocument(
   controllers: ControllerInfo[],
   format: 'ts' | 'js',
   readDocsFile: (absolutePath: string) => string | null,
+  projectsByControllerPath?: Map<string, Project>,
 ): PatchSpecResult {
-  const { patch, controllersWithoutDocs, unparseableDocsFiles } = computeSpecPatch(controllers, format, readDocsFile);
+  const { patch, controllersWithoutDocs, unparseableDocsFiles } = computeSpecPatch(
+    controllers,
+    format,
+    readDocsFile,
+    projectsByControllerPath,
+  );
 
   const { document: patchedDocument, unmatchedRoutes } = mergeSpecPatch(document, patch);
   const patchedOperationCount = Object.values(patch).reduce((count, methods) => count + Object.keys(methods).length, 0);

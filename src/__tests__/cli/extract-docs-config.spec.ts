@@ -1,3 +1,7 @@
+import fs from 'fs';
+import os from 'os';
+import path from 'path';
+import { Project } from 'ts-morph';
 import { extractDocsConfig } from '../../cli/extract-docs-config';
 
 const SAMPLE = `
@@ -68,5 +72,64 @@ describe('extractDocsConfig()', () => {
   it('returns empty classDecorators/methods when docs() is called with an empty config', () => {
     const result = extractDocsConfig(`docs(Foo, {});`);
     expect(result).toEqual({ classDecorators: [], methods: {} });
+  });
+});
+
+describe('extractDocsConfig() — with a real project context (cross-file resolution)', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'docfy-extract-docs-config-test-'));
+    fs.writeFileSync(
+      path.join(tmpDir, 'tsconfig.json'),
+      JSON.stringify({ compilerOptions: { target: 'ES2020', module: 'commonjs' } }),
+    );
+    fs.writeFileSync(path.join(tmpDir, 'role.enum.ts'), `export enum Role { Member = 'member', Admin = 'admin' }`);
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('resolves an enum imported from another file when a project + absolutePath are given', () => {
+    const project = new Project({
+      tsConfigFilePath: path.join(tmpDir, 'tsconfig.json'),
+      skipAddingFilesFromTsConfig: false,
+    });
+    const docsPath = path.join(tmpDir, 'users.controller.docs.ts');
+    const source = `
+      import { docs } from 'nestjs-docfy';
+      import { ApiQuery } from '@nestjs/swagger';
+      import { UsersController } from './users.controller';
+      import { Role } from './role.enum';
+
+      docs(UsersController, {
+        classDecorators: [],
+        methods: { findAll: [ApiQuery({ name: 'role', enum: Role })] },
+      });
+    `;
+
+    const result = extractDocsConfig(source, { project, absolutePath: docsPath });
+    expect(result!.methods.findAll).toEqual([
+      { name: 'ApiQuery', args: [{ name: 'role', enum: ['member', 'admin'] }] },
+    ]);
+  });
+
+  it('falls back to Unresolved for the same import without a project context (the pre-fix behavior)', () => {
+    const source = `
+      import { docs } from 'nestjs-docfy';
+      import { ApiQuery } from '@nestjs/swagger';
+      import { UsersController } from './users.controller';
+      import { Role } from './role.enum';
+
+      docs(UsersController, {
+        classDecorators: [],
+        methods: { findAll: [ApiQuery({ name: 'role', enum: Role })] },
+      });
+    `;
+
+    const result = extractDocsConfig(source);
+    const enumArg = (result!.methods.findAll[0].args[0] as { enum: unknown }).enum;
+    expect(enumArg).toEqual({ __unresolved: true, text: 'Role' });
   });
 });

@@ -64,7 +64,13 @@ function unresolved(node: Node): Unresolved {
  */
 function resolveEnumIdentifier(node: Node): (string | number)[] | undefined {
   if (node.getKind() !== SyntaxKind.Identifier) return undefined;
-  const symbol = node.asKindOrThrow(SyntaxKind.Identifier).getSymbol();
+  const rawSymbol = node.asKindOrThrow(SyntaxKind.Identifier).getSymbol();
+  // A bare reference to an *imported* enum resolves, via getSymbol(), to the
+  // local ImportSpecifier binding, not the real EnumDeclaration — that only
+  // comes from following the alias to whatever it actually points at.
+  // getAliasedSymbol() is a no-op (returns undefined) for a non-alias
+  // symbol, so this is safe for the same-file case too.
+  const symbol = rawSymbol?.getAliasedSymbol() ?? rawSymbol;
   const enumDecl = symbol
     ?.getDeclarations()
     .find((d): d is Node & { getKind(): SyntaxKind.EnumDeclaration } => d.getKind() === SyntaxKind.EnumDeclaration);

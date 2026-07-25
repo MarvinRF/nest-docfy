@@ -1,9 +1,24 @@
-import { Project, SyntaxKind } from 'ts-morph';
+import { Project, SourceFile, SyntaxKind } from 'ts-morph';
 import { evaluateDecoratorCall, DecoratorCall } from './eval-decorator-args';
 
 export interface ExtractedDocsConfig {
   classDecorators: DecoratorCall[];
   methods: Record<string, DecoratorCall[]>;
+}
+
+/**
+ * A real, disk-backed project + the docs file's absolute path — when given,
+ * `extractDocsConfig` parses the file inside that project instead of an
+ * isolated one, so a decorator argument that references a symbol imported
+ * from another file (e.g. `enum: Role` where `Role` comes from
+ * `./role.enum`) resolves for real. Callers that already scanned the
+ * project's controllers (`scanApp`/`scanAllApps`) already have this project
+ * sitting around with every relevant file loaded — see
+ * `ScanResult.projectsByControllerPath`.
+ */
+export interface DocsFileProjectContext {
+  project: Project;
+  absolutePath: string;
 }
 
 /**
@@ -17,19 +32,30 @@ export interface ExtractedDocsConfig {
  * to the same class object the running app uses (see the README's "Not
  * supported: webpack: true" section for why the runtime pipeline can't).
  *
+ * Without `context`, the file is parsed in an isolated in-memory project
+ * with nothing else in scope — fine for the `docs(...)` call's own literal
+ * structure, but a decorator argument referencing an imported symbol will
+ * never resolve (see `DocsFileProjectContext`). Pass `context` to fix that.
+ *
  * Returns null if the file can't be parsed or no `docs(...)` call is found.
  */
-export function extractDocsConfig(sourceText: string): ExtractedDocsConfig | null {
+export function extractDocsConfig(sourceText: string, context?: DocsFileProjectContext): ExtractedDocsConfig | null {
   let project: Project;
-  try {
-    project = new Project({ useInMemoryFileSystem: true, skipFileDependencyResolution: true });
-  } catch {
-    return null;
+  if (context) {
+    project = context.project;
+  } else {
+    try {
+      project = new Project({ useInMemoryFileSystem: true, skipFileDependencyResolution: true });
+    } catch {
+      return null;
+    }
   }
 
-  let sf;
+  let sf: SourceFile;
   try {
-    sf = project.createSourceFile('docs.ts', sourceText);
+    sf = context
+      ? project.createSourceFile(context.absolutePath, sourceText, { overwrite: true })
+      : project.createSourceFile('docs.ts', sourceText);
   } catch {
     return null;
   }
