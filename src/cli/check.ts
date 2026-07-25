@@ -75,10 +75,7 @@ export function getDocumentedMethods(docsFilePath: string): Set<string> {
  *
  * Returns an array of issues. Empty array means everything is in sync.
  */
-export function checkControllers(
-  controllers: ControllerInfo[],
-  format: 'ts' | 'js',
-): CheckIssue[] {
+export function checkControllers(controllers: ControllerInfo[], format: 'ts' | 'js'): CheckIssue[] {
   const issues: CheckIssue[] = [];
 
   for (const ctrl of controllers) {
@@ -101,8 +98,8 @@ export function checkControllers(
     const documented = getDocumentedMethods(docsFile);
 
     const undocumented = ctrl.methods
-      .filter((m) => m.httpDecorator !== null)       // only HTTP-mapped methods
-      .filter((m) => IDENTIFIER_RE.test(m.name))     // only safe identifiers
+      .filter((m) => m.httpDecorator !== null) // only HTTP-mapped methods
+      .filter((m) => IDENTIFIER_RE.test(m.name)) // only safe identifiers
       .filter((m) => !documented.has(m.name))
       .map((m) => m.name);
 

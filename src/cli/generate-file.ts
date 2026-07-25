@@ -1,5 +1,12 @@
 import path from 'path';
-import type { ControllerInfo, InlineSchema, MethodInfo, ParamInfo, ResponseTypeInfo, SchemaProperty } from './extract-methods';
+import type {
+  ControllerInfo,
+  InlineSchema,
+  MethodInfo,
+  ParamInfo,
+  ResponseTypeInfo,
+  SchemaProperty,
+} from './extract-methods';
 
 // ---------------------------------------------------------------------------
 // Sanitisation helpers
@@ -31,9 +38,12 @@ function sanitizeParamName(value: string): string {
 function defaultStatusCode(httpDecorator: string | null, httpStatusCode: number | null): number {
   if (httpStatusCode !== null) return httpStatusCode;
   switch (httpDecorator) {
-    case 'Post':   return 201;
-    case 'Delete': return 204;
-    default:       return 200;
+    case 'Post':
+      return 201;
+    case 'Delete':
+      return 204;
+    default:
+      return 200;
   }
 }
 
@@ -81,17 +91,14 @@ interface ResolvedImport {
   importPath: string;
 }
 
-function collectDtoImports(
-  methods: MethodInfo[],
-  docsFilePath: string,
-): ResolvedImport[] {
+function collectDtoImports(methods: MethodInfo[], docsFilePath: string): ResolvedImport[] {
   const seen = new Map<string, string>(); // name → importPath
 
   const register = (rt: ResponseTypeInfo | null) => {
     if (!rt) return;
     if (!IDENTIFIER_RE.test(rt.name)) return;
-    if (rt.isInterface) return;   // interfaces have no runtime value — don't import
-    if (rt.classSchema) return;   // using inline schema — type: not referenced, no import needed
+    if (rt.isInterface) return; // interfaces have no runtime value — don't import
+    if (rt.classSchema) return; // using inline schema — type: not referenced, no import needed
     if (seen.has(rt.name)) return;
     seen.set(rt.name, resolvedImportPath(docsFilePath, rt.absolutePath));
   };
@@ -110,7 +117,8 @@ function collectDtoImports(
 // Swagger decorator set collector (for dynamic imports)
 // ---------------------------------------------------------------------------
 
-type SwaggerDecorator = 'ApiTags' | 'ApiOperation' | 'ApiResponse' | 'ApiParam' | 'ApiBody' | 'ApiQuery' | 'ApiBearerAuth';
+type SwaggerDecorator =
+  'ApiTags' | 'ApiOperation' | 'ApiResponse' | 'ApiParam' | 'ApiBody' | 'ApiQuery' | 'ApiBearerAuth';
 
 function collectSwaggerDecorators(ctrl: ControllerInfo): Set<SwaggerDecorator> {
   const used = new Set<SwaggerDecorator>(['ApiTags', 'ApiOperation', 'ApiResponse']);
@@ -119,7 +127,7 @@ function collectSwaggerDecorators(ctrl: ControllerInfo): Set<SwaggerDecorator> {
     for (const p of m.params) {
       if (p.nestDecorator === '@Param' && p.nestDecoratorArg !== null) used.add('ApiParam');
       if (p.nestDecorator === '@Query' && p.nestDecoratorArg !== null) used.add('ApiQuery');
-      if (p.nestDecorator === '@Body' && p.nestDecoratorArg === null)  used.add('ApiBody');
+      if (p.nestDecorator === '@Body' && p.nestDecoratorArg === null) used.add('ApiBody');
     }
   }
   if (ctrl.controllerRequiresAuth) used.add('ApiBearerAuth');
@@ -134,15 +142,11 @@ function methodSignatureComment(m: MethodInfo): string {
   const verb = m.httpDecorator ? `${m.httpDecorator.toUpperCase()} ` : '';
   const httpPath = m.httpPath !== null ? sanitizeHttpPath(m.httpPath) : '';
   const route = verb || httpPath ? `${verb}${httpPath} → ` : '';
-  const paramList = m.params
-    .map((p) => `${sanitizeIdentifier(p.name, '_')}: ${sanitizeComment(p.type)}`)
-    .join(', ');
+  const paramList = m.params.map((p) => `${sanitizeIdentifier(p.name, '_')}: ${sanitizeComment(p.type)}`).join(', ');
   const returnType = sanitizeComment(m.returnType);
   const asyncPrefix = m.isAsync ? 'async ' : '';
   const methodName = sanitizeIdentifier(m.name, '_');
-  const inherited = m.isInherited && m.inheritedFrom
-    ? ` [inherited from ${sanitizeComment(m.inheritedFrom)}]`
-    : '';
+  const inherited = m.isInherited && m.inheritedFrom ? ` [inherited from ${sanitizeComment(m.inheritedFrom)}]` : '';
   return `${route}${asyncPrefix}${methodName}(${paramList}): ${returnType}${inherited}`;
 }
 
@@ -201,21 +205,19 @@ function renderSchemaProperty(prop: SchemaProperty, indent: string): string {
   const inner = `${indent}  `;
   const pairs: string[] = [];
 
-  if (prop.type !== undefined)   pairs.push(`${inner}type: '${prop.type}'`);
+  if (prop.type !== undefined) pairs.push(`${inner}type: '${prop.type}'`);
   if (prop.format !== undefined) pairs.push(`${inner}format: '${prop.format}'`);
-  if (prop.nullable)             pairs.push(`${inner}nullable: true`);
+  if (prop.nullable) pairs.push(`${inner}nullable: true`);
   if (prop.minimum !== undefined) pairs.push(`${inner}minimum: ${prop.minimum}`);
   if (prop.maximum !== undefined) pairs.push(`${inner}maximum: ${prop.maximum}`);
   if (prop.minLength !== undefined) pairs.push(`${inner}minLength: ${prop.minLength}`);
   if (prop.maxLength !== undefined) pairs.push(`${inner}maxLength: ${prop.maxLength}`);
   if (prop.enum && prop.enum.length > 0) {
-    const vals = prop.enum.map((v) => typeof v === 'string' ? `'${v}'` : String(v)).join(', ');
+    const vals = prop.enum.map((v) => (typeof v === 'string' ? `'${v}'` : String(v))).join(', ');
     pairs.push(`${inner}enum: [${vals}]`);
   }
   if (prop.oneOf && prop.oneOf.length > 0) {
-    const entries = prop.oneOf
-      .map((p) => `${inner}  ${renderSchemaProperty(p, `${inner}  `)}`)
-      .join(',\n');
+    const entries = prop.oneOf.map((p) => `${inner}  ${renderSchemaProperty(p, `${inner}  `)}`).join(',\n');
     pairs.push(`${inner}oneOf: [\n${entries},\n${inner}]`);
   }
   if (prop.items !== undefined) {
@@ -297,9 +299,7 @@ function renderApiResponse(status: number, responseType: ResponseTypeInfo | null
       `${baseIndent}})`,
     ].join('\n');
   }
-  const typePart = responseType.isArray
-    ? `[${responseType.name}]`
-    : responseType.name;
+  const typePart = responseType.isArray ? `[${responseType.name}]` : responseType.name;
   return `ApiResponse({ status: ${status}, description: '${description}', type: ${typePart} })`;
 }
 
@@ -314,7 +314,7 @@ function renderApiResponse(status: number, responseType: ResponseTypeInfo | null
 export function inferSummary(methodName: string): string {
   const words = methodName
     .replace(/([A-Z]+)([A-Z][a-z])/g, '$1 $2') // HTTPMethod → HTTP Method
-    .replace(/([a-z\d])([A-Z])/g, '$1 $2')      // camelCase → camel Case
+    .replace(/([a-z\d])([A-Z])/g, '$1 $2') // camelCase → camel Case
     .split(' ')
     .filter(Boolean);
 
@@ -345,17 +345,13 @@ function renderMethod(m: MethodInfo, indent: string): string {
   if (m.requiresAuth) lines.push(`${inner}ApiBearerAuth(),`);
 
   for (const p of m.params) {
-    const paramLine = renderApiParam(p, inner)
-      ?? renderApiQuery(p, inner)
-      ?? renderApiBody(p, inner);
+    const paramLine = renderApiParam(p, inner) ?? renderApiQuery(p, inner) ?? renderApiBody(p, inner);
     if (paramLine) lines.push(paramLine);
   }
 
   lines.push(`${inner}${renderApiResponse(status, m.responseType, inner)},`);
 
-  const hasBodyParam = m.params.some(
-    (p) => p.nestDecorator === '@Body' && p.nestDecoratorArg === null,
-  );
+  const hasBodyParam = m.params.some((p) => p.nestDecorator === '@Body' && p.nestDecoratorArg === null);
   if (hasBodyParam) {
     lines.push(`${inner}ApiResponse({ status: 400, description: '${statusDescription(400)}' }),`);
   }
@@ -374,20 +370,14 @@ function renderMethod(m: MethodInfo, indent: string): string {
 
 function apiTagValue(ctrl: ControllerInfo): string {
   if (ctrl.controllerPath) return sanitizeComment(ctrl.controllerPath);
-  return sanitizeComment(
-    ctrl.className.replace(/Controller$/, '').toLowerCase(),
-  );
+  return sanitizeComment(ctrl.className.replace(/Controller$/, '').toLowerCase());
 }
 
 // ---------------------------------------------------------------------------
 // Full file renderer
 // ---------------------------------------------------------------------------
 
-export function renderDocsFile(
-  ctrl: ControllerInfo,
-  docsFilePath: string,
-  format: 'ts' | 'js',
-): string {
+export function renderDocsFile(ctrl: ControllerInfo, docsFilePath: string, format: 'ts' | 'js'): string {
   const importPath = relativeImport(docsFilePath, ctrl.filePath);
   const className = sanitizeIdentifier(ctrl.className, 'Controller');
   const tag = apiTagValue(ctrl);
@@ -395,7 +385,9 @@ export function renderDocsFile(
   const dtoImports = collectDtoImports(ctrl.methods, docsFilePath);
   const swaggerDecorators = collectSwaggerDecorators(ctrl);
   const swaggerImportList = [
-    'ApiTags', 'ApiOperation', 'ApiResponse',
+    'ApiTags',
+    'ApiOperation',
+    'ApiResponse',
     ...(swaggerDecorators.has('ApiBearerAuth') ? ['ApiBearerAuth'] : []),
     ...(swaggerDecorators.has('ApiParam') ? ['ApiParam'] : []),
     ...(swaggerDecorators.has('ApiQuery') ? ['ApiQuery'] : []),
@@ -407,14 +399,13 @@ export function renderDocsFile(
     ...(ctrl.controllerRequiresAuth ? [`    ApiBearerAuth(),`] : []),
   ].join('\n');
 
-  const methodsBlock = ctrl.methods.length === 0
-    ? '  // No public HTTP methods found.'
-    : ctrl.methods.map((m) => renderMethod(m, '  ')).join('\n\n');
+  const methodsBlock =
+    ctrl.methods.length === 0
+      ? '  // No public HTTP methods found.'
+      : ctrl.methods.map((m) => renderMethod(m, '  ')).join('\n\n');
 
   if (format === 'js') {
-    const requireLines = dtoImports
-      .map((i) => `const { ${i.name} } = require('${i.importPath}');`)
-      .join('\n');
+    const requireLines = dtoImports.map((i) => `const { ${i.name} } = require('${i.importPath}');`).join('\n');
 
     return [
       `// Generated by nestjs-docfy — edit freely, use --force to merge new methods`,
@@ -429,16 +420,17 @@ export function renderDocsFile(
       classDecoratorLines,
       `  ],`,
       `  methods: {`,
-      methodsBlock.split('\n').map((l) => (l ? `  ${l}` : l)).join('\n'),
+      methodsBlock
+        .split('\n')
+        .map((l) => (l ? `  ${l}` : l))
+        .join('\n'),
       `  },`,
       `});`,
       ``,
     ].join('\n');
   }
 
-  const importLines = dtoImports
-    .map((i) => `import { ${i.name} } from '${i.importPath}';`)
-    .join('\n');
+  const importLines = dtoImports.map((i) => `import { ${i.name} } from '${i.importPath}';`).join('\n');
 
   return [
     `// Generated by nestjs-docfy — edit freely, use --force to merge new methods`,

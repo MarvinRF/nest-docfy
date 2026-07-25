@@ -21,7 +21,7 @@ describe('mergeOperation()', () => {
     expect(result.tags).toEqual(['a', 'b', 'c']);
   });
 
-  it('treats tags differing only by case as the same tag, keeping the base document\'s casing', () => {
+  it("treats tags differing only by case as the same tag, keeping the base document's casing", () => {
     // Real-world case this reproduces: @nestjs/swagger auto-tags a controller
     // as "Auth" (from the class name) while a docs file's ApiTags('auth')
     // uses lowercase — same logical group, would otherwise render as two

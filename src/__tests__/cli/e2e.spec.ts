@@ -40,7 +40,11 @@ function findDocs(dir: string): string[] {
       else if (entry.endsWith('.docs.ts') || entry.endsWith('.docs.js')) result.push(full);
     }
   }
-  try { walk(dir); } catch { /* dir may not exist */ }
+  try {
+    walk(dir);
+  } catch {
+    /* dir may not exist */
+  }
   return result;
 }
 

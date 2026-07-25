@@ -30,8 +30,7 @@ export function resolveDocsPath(
   readCache: () => CacheSnapshot = () => require.cache as unknown as CacheSnapshot,
   callSiteStack?: string,
 ): string | null {
-  const controllerFile =
-    findFileInCache(controllerClass, readCache()) ?? resolveFromCallSite(callSiteStack);
+  const controllerFile = findFileInCache(controllerClass, readCache()) ?? resolveFromCallSite(callSiteStack);
   if (!controllerFile) return null;
 
   const ext = path.extname(controllerFile); // .ts or .js

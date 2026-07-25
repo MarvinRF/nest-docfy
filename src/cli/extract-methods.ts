@@ -1,9 +1,16 @@
-import { ClassDeclaration, InterfaceDeclaration, MethodDeclaration, ParameterDeclaration, SyntaxKind, Type } from 'ts-morph';
+import {
+  ClassDeclaration,
+  InterfaceDeclaration,
+  MethodDeclaration,
+  ParameterDeclaration,
+  SyntaxKind,
+  Type,
+} from 'ts-morph';
 
 export interface ParamInfo {
   name: string;
   type: string;
-  nestDecorator: string | null;    // '@Param', '@Body', '@Query', etc.
+  nestDecorator: string | null; // '@Param', '@Body', '@Query', etc.
   nestDecoratorArg: string | null; // e.g. 'id' from @Param('id'), null when no arg
   bodyType: ResponseTypeInfo | null; // resolved DTO type for @Body() params
 }
@@ -91,21 +98,47 @@ export interface ControllerInfo {
   controllerRequiresAuth: boolean; // true when @UseGuards is on the controller itself
 }
 
-const HTTP_DECORATORS = new Set([
-  'Get', 'Post', 'Put', 'Patch', 'Delete', 'Head', 'Options', 'All',
-]);
+const HTTP_DECORATORS = new Set(['Get', 'Post', 'Put', 'Patch', 'Delete', 'Head', 'Options', 'All']);
 
 const NEST_PARAM_DECORATORS = new Set([
-  'Param', 'Body', 'Query', 'Headers', 'Req', 'Res', 'Request',
-  'Response', 'Session', 'UploadedFile', 'UploadedFiles', 'Ip', 'HostParam',
+  'Param',
+  'Body',
+  'Query',
+  'Headers',
+  'Req',
+  'Res',
+  'Request',
+  'Response',
+  'Session',
+  'UploadedFile',
+  'UploadedFiles',
+  'Ip',
+  'HostParam',
 ]);
 
 /** Primitives and built-ins that should never appear as ApiResponse/ApiBody type. */
 const SKIP_TYPE_NAMES = new Set([
-  'void', 'undefined', 'null', 'never', 'unknown', 'any',
-  'string', 'number', 'boolean', 'object', 'symbol', 'bigint',
-  'String', 'Number', 'Boolean', 'Object', 'Array',
-  'Promise', 'Observable', 'Subject', 'BehaviorSubject',
+  'void',
+  'undefined',
+  'null',
+  'never',
+  'unknown',
+  'any',
+  'string',
+  'number',
+  'boolean',
+  'object',
+  'symbol',
+  'bigint',
+  'String',
+  'Number',
+  'Boolean',
+  'Object',
+  'Array',
+  'Promise',
+  'Observable',
+  'Subject',
+  'BehaviorSubject',
 ]);
 
 const IDENTIFIER_RE = /^[$_a-zA-Z][$_a-zA-Z0-9]*$/;
@@ -189,14 +222,10 @@ function typeToSchemaProperty(type: Type, depth: number): SchemaProperty {
         return { nullable: true };
       } else if (nonNull.every((t) => t.isStringLiteral())) {
         // Union of string literals — the common "poor man's enum" shape (`'a' | 'b' | 'c'`).
-        const values = nonNull
-          .map((t) => t.getLiteralValue())
-          .filter((v): v is string => typeof v === 'string');
+        const values = nonNull.map((t) => t.getLiteralValue()).filter((v): v is string => typeof v === 'string');
         return { type: 'string', enum: values, ...(isNullable ? { nullable: true } : {}) };
       } else if (nonNull.every((t) => t.isNumberLiteral())) {
-        const values = nonNull
-          .map((t) => t.getLiteralValue())
-          .filter((v): v is number => typeof v === 'number');
+        const values = nonNull.map((t) => t.getLiteralValue()).filter((v): v is number => typeof v === 'number');
         const allIntegers = values.every((v) => Number.isInteger(v));
         return {
           type: allIntegers ? 'integer' : 'number',
@@ -297,24 +326,24 @@ function buildSchemaFromInterface(iface: InterfaceDeclaration, depth: number): I
  * misinterpreted as a type hint.
  */
 const CV_TYPE_MAP: Record<string, { type: JsonSchemaType; format?: string }> = {
-  IsString:     { type: 'string' },
-  IsEmail:      { type: 'string', format: 'email' },
-  IsUrl:        { type: 'string', format: 'uri' },
-  IsUUID:       { type: 'string', format: 'uuid' },
+  IsString: { type: 'string' },
+  IsEmail: { type: 'string', format: 'email' },
+  IsUrl: { type: 'string', format: 'uri' },
+  IsUUID: { type: 'string', format: 'uuid' },
   IsDateString: { type: 'string', format: 'date-time' },
-  IsNumber:     { type: 'number' },
-  IsInt:        { type: 'integer' },
-  IsPositive:   { type: 'number' },
-  IsNegative:   { type: 'number' },
-  IsBoolean:    { type: 'boolean' },
-  IsArray:      { type: 'array' },
-  IsObject:     { type: 'object' },
+  IsNumber: { type: 'number' },
+  IsInt: { type: 'integer' },
+  IsPositive: { type: 'number' },
+  IsNegative: { type: 'number' },
+  IsBoolean: { type: 'boolean' },
+  IsArray: { type: 'array' },
+  IsObject: { type: 'object' },
 };
 
 /** class-validator decorators that accept a single numeric argument (min/max/length). */
 const CV_NUMERIC_ARG_MAP: Record<string, keyof SchemaProperty> = {
-  Min:       'minimum',
-  Max:       'maximum',
+  Min: 'minimum',
+  Max: 'maximum',
   MinLength: 'minLength',
   MaxLength: 'maxLength',
 };
@@ -326,10 +355,14 @@ function classHasApiProperty(cls: ClassDeclaration): boolean {
       for (const dec of prop.getDecorators()) {
         try {
           if (dec.getName() === 'ApiProperty') return true;
-        } catch { /* ignore */ }
+        } catch {
+          /* ignore */
+        }
       }
     }
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
   return false;
 }
 
@@ -366,7 +399,13 @@ function buildSchemaFromClass(cls: ClassDeclaration): InlineSchema | null {
 
         const decorators = prop.getDecorators();
         const decoratorNames = new Set(
-          decorators.map((d) => { try { return d.getName(); } catch { return ''; } }),
+          decorators.map((d) => {
+            try {
+              return d.getName();
+            } catch {
+              return '';
+            }
+          }),
         );
 
         // Collect type info from whitelisted decorators
@@ -375,7 +414,11 @@ function buildSchemaFromClass(cls: ClassDeclaration): InlineSchema | null {
 
         for (const dec of decorators) {
           let decName: string;
-          try { decName = dec.getName(); } catch { continue; }
+          try {
+            decName = dec.getName();
+          } catch {
+            continue;
+          }
 
           if (decName === 'IsOptional') {
             // Mark as optional — won't be pushed to required[]
@@ -412,7 +455,9 @@ function buildSchemaFromClass(cls: ClassDeclaration): InlineSchema | null {
         properties[propName] = schema;
         foundAny = true;
         if (!isOptional) required.push(propName);
-      } catch { /* skip unresolvable property */ }
+      } catch {
+        /* skip unresolvable property */
+      }
     }
 
     if (!foundAny) return null;
@@ -493,13 +538,12 @@ function resolveNamedType(type: Type, isArray: boolean): ResponseTypeInfo | null
 
     const isInterface = declarations[0].getKind() === SyntaxKind.InterfaceDeclaration;
 
-    const inlineSchema = isInterface
-      ? buildSchemaFromInterface(declarations[0] as InterfaceDeclaration, 0)
-      : undefined;
+    const inlineSchema = isInterface ? buildSchemaFromInterface(declarations[0] as InterfaceDeclaration, 0) : undefined;
 
-    const classSchema = !isInterface && declarations[0].getKind() === SyntaxKind.ClassDeclaration
-      ? buildSchemaFromClass(declarations[0] as ClassDeclaration) ?? undefined
-      : undefined;
+    const classSchema =
+      !isInterface && declarations[0].getKind() === SyntaxKind.ClassDeclaration
+        ? (buildSchemaFromClass(declarations[0] as ClassDeclaration) ?? undefined)
+        : undefined;
 
     return { name, absolutePath, isArray, isInterface, inlineSchema, classSchema };
   } catch {
@@ -626,9 +670,7 @@ function hasJwtGuard(decorators: ReturnType<ClassDeclaration['getDecorators']>):
  */
 export function extractMethods(cls: ClassDeclaration, controllerAuth: boolean): MethodInfo[] {
   const results: MethodInfo[] = [];
-  const ownMethodNames = new Set(
-    cls.getMethods().map((m) => m.getName()),
-  );
+  const ownMethodNames = new Set(cls.getMethods().map((m) => m.getName()));
 
   // Own methods
   for (const method of cls.getMethods()) {
@@ -651,9 +693,7 @@ export function extractMethods(cls: ClassDeclaration, controllerAuth: boolean): 
     let returnType = 'unknown';
     try {
       const returnTypeNode = method.getReturnTypeNode();
-      returnType = returnTypeNode
-        ? returnTypeNode.getText()
-        : cleanTypeText(method.getReturnType().getText());
+      returnType = returnTypeNode ? returnTypeNode.getText() : cleanTypeText(method.getReturnType().getText());
     } catch {
       // ts-morph can fail to infer complex types — keep 'unknown'
     }

@@ -41,7 +41,11 @@ function schemaFromResponseType(info: ResponseTypeInfo | null): OpenApiSchema | 
   }
   const inline = info.classSchema ?? info.inlineSchema;
   const base: OpenApiSchema = inline
-    ? { type: 'object', properties: inline.properties, ...(inline.required.length ? { required: inline.required } : {}) }
+    ? {
+        type: 'object',
+        properties: inline.properties,
+        ...(inline.required.length ? { required: inline.required } : {}),
+      }
     : { $ref: `#/components/schemas/${info.name}` };
   return info.isArray ? { type: 'array', items: base } : base;
 }

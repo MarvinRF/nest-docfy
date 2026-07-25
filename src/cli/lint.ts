@@ -75,11 +75,13 @@ export function parseDocsFileMethods(docsFilePath: string): Map<string, MethodDo
   }
 
   try {
-    const docsCalls = sourceFile
-      .getDescendantsOfKind(SyntaxKind.CallExpression)
-      .filter((c) => {
-        try { return c.getExpression().getText() === 'docs'; } catch { return false; }
-      });
+    const docsCalls = sourceFile.getDescendantsOfKind(SyntaxKind.CallExpression).filter((c) => {
+      try {
+        return c.getExpression().getText() === 'docs';
+      } catch {
+        return false;
+      }
+    });
 
     for (const docsCall of docsCalls) {
       const configArg = getObjectLiteralArgAt(docsCall, 1);
@@ -96,7 +98,11 @@ export function parseDocsFileMethods(docsFilePath: string): Map<string, MethodDo
         const pa = prop as PropertyAssignment;
 
         let name: string;
-        try { name = pa.getName(); } catch { continue; }
+        try {
+          name = pa.getName();
+        } catch {
+          continue;
+        }
         if (!IDENTIFIER_RE.test(name)) continue;
 
         const init = pa.getInitializer();
@@ -114,7 +120,11 @@ export function parseDocsFileMethods(docsFilePath: string): Map<string, MethodDo
           const callEl = el as CallExpression;
 
           let calleeName: string;
-          try { calleeName = callEl.getExpression().getText(); } catch { continue; }
+          try {
+            calleeName = callEl.getExpression().getText();
+          } catch {
+            continue;
+          }
 
           const objArg = getObjectLiteralArgAt(callEl, 0);
 

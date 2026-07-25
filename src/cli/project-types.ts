@@ -1,8 +1,4 @@
-export type ProjectKind =
-  | 'simple'
-  | 'nx'
-  | 'nest-cli-monorepo'
-  | 'generic-monorepo';
+export type ProjectKind = 'simple' | 'nx' | 'nest-cli-monorepo' | 'generic-monorepo';
 
 export interface ProjectApp {
   /** Human-readable name of the app/lib */

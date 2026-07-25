@@ -44,9 +44,7 @@ export function validateGlob(pattern: string): string {
   // Reject attempts to escape the root via relative segments
   const normalized = path.normalize(pattern.replace(/\*/g, '_'));
   if (normalized.startsWith('..')) {
-    throw new Error(
-      `Invalid --pattern: "${pattern}" resolves outside the project root.`,
-    );
+    throw new Error(`Invalid --pattern: "${pattern}" resolves outside the project root.`);
   }
   return pattern;
 }
@@ -56,11 +54,7 @@ export function validateGlob(pattern: string): string {
  * against the declared root to prevent traversal.
  * Returns the resolved absolute path.
  */
-export function resolveAndValidate(
-  value: string,
-  root: string,
-  optionName: string,
-): string {
+export function resolveAndValidate(value: string, root: string, optionName: string): string {
   let resolved: string;
   try {
     resolved = path.resolve(root, value);
@@ -90,19 +84,13 @@ export function parseAndValidateOptions(raw: {
 
   const pattern = validateGlob(raw.pattern ?? '**/*.controller.ts');
 
-  const tsconfig = raw.tsconfig
-    ? resolveAndValidate(raw.tsconfig, root, '--tsconfig')
-    : undefined;
+  const tsconfig = raw.tsconfig ? resolveAndValidate(raw.tsconfig, root, '--tsconfig') : undefined;
 
-  const out = raw.out
-    ? resolveAndValidate(raw.out, root, '--out')
-    : undefined;
+  const out = raw.out ? resolveAndValidate(raw.out, root, '--out') : undefined;
 
   const format = raw.format ?? 'ts';
   if (!VALID_FORMATS.includes(format as OutputFormat)) {
-    throw new Error(
-      `Invalid --format: "${format}". Allowed values: ${VALID_FORMATS.join(', ')}.`,
-    );
+    throw new Error(`Invalid --format: "${format}". Allowed values: ${VALID_FORMATS.join(', ')}.`);
   }
 
   return {

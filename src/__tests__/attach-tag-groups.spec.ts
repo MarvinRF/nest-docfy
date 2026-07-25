@@ -20,9 +20,7 @@ describe('attachTagGroups()', () => {
       'x-tagGroups': { name: string; tags: string[] }[];
     };
 
-    expect(result['x-tagGroups']).toEqual([
-      { name: 'Administration', tags: ['users', 'roles'] },
-    ]);
+    expect(result['x-tagGroups']).toEqual([{ name: 'Administration', tags: ['users', 'roles'] }]);
   });
 
   it('does not mutate the original document', () => {

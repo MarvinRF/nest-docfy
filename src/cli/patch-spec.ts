@@ -116,10 +116,7 @@ export function computePatchedDocument(
   const { patch, controllersWithoutDocs, unparseableDocsFiles } = computeSpecPatch(controllers, format, readDocsFile);
 
   const { document: patchedDocument, unmatchedRoutes } = mergeSpecPatch(document, patch);
-  const patchedOperationCount = Object.values(patch).reduce(
-    (count, methods) => count + Object.keys(methods).length,
-    0,
-  );
+  const patchedOperationCount = Object.values(patch).reduce((count, methods) => count + Object.keys(methods).length, 0);
 
   return {
     document: patchedDocument,

@@ -44,9 +44,7 @@ describe('docs()', () => {
     const Ctrl = freshController();
     docs(Ctrl, { group: 'Administration', tags: ['users'] });
 
-    expect(TagGroupRegistry.getAll()).toEqual([
-      { name: 'Administration', tags: ['users'] },
-    ]);
+    expect(TagGroupRegistry.getAll()).toEqual([{ name: 'Administration', tags: ['users'] }]);
   });
 
   it('does not register a tag group when group is omitted', () => {
@@ -60,9 +58,7 @@ describe('docs()', () => {
     const Ctrl = freshController();
     docs(Ctrl, { group: 'Administration' });
 
-    expect(TagGroupRegistry.getAll()).toEqual([
-      { name: 'Administration', tags: [] },
-    ]);
+    expect(TagGroupRegistry.getAll()).toEqual([{ name: 'Administration', tags: [] }]);
   });
 
   it('applies class decorators to the constructor', () => {

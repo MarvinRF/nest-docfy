@@ -16,10 +16,7 @@ export interface CoverageReport {
  * Computes documentation coverage across all scanned controllers.
  * Only HTTP-mapped methods (those with an httpDecorator) are counted.
  */
-export function computeCoverage(
-  controllers: ControllerInfo[],
-  format: 'ts' | 'js',
-): CoverageReport {
+export function computeCoverage(controllers: ControllerInfo[], format: 'ts' | 'js'): CoverageReport {
   let totalEndpoints = 0;
   let documentedEndpoints = 0;
 
@@ -35,10 +32,7 @@ export function computeCoverage(
   }
 
   const missingEndpoints = totalEndpoints - documentedEndpoints;
-  const coveragePercent =
-    totalEndpoints === 0
-      ? NaN
-      : Math.round((documentedEndpoints / totalEndpoints) * 1000) / 10;
+  const coveragePercent = totalEndpoints === 0 ? NaN : Math.round((documentedEndpoints / totalEndpoints) * 1000) / 10;
 
   return {
     totalControllers: controllers.length,

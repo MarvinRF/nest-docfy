@@ -52,10 +52,7 @@ export function docs<T>(controllerClass: Constructor<T>, config: DocsConfig<T>):
   if (!config.methods) return;
 
   for (const [methodName, decorators] of Object.entries(config.methods) as [string, MethodDecorator[]][]) {
-    const descriptor = Object.getOwnPropertyDescriptor(
-      controllerClass.prototype,
-      methodName,
-    );
+    const descriptor = Object.getOwnPropertyDescriptor(controllerClass.prototype, methodName);
 
     if (!descriptor) {
       console.warn(

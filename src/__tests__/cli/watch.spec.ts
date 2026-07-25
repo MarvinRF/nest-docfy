@@ -21,7 +21,10 @@ describe('watchProject()', () => {
       pattern: '**/*.controller.ts',
       onRebuild: () => {},
     });
-    expect(() => { stop(); stop(); }).not.toThrow();
+    expect(() => {
+      stop();
+      stop();
+    }).not.toThrow();
   });
 
   it('does not start watching directories outside root', () => {

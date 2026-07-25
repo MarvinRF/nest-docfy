@@ -61,16 +61,12 @@ export class DocfyModule {
       } catch (err: unknown) {
         if (isMissingDocsFile(err, docsPath)) {
           // The docs file simply doesn't exist — allowed unless strict mode
-          const message =
-            `No docs file found for ${controllerClass.name}. Expected: ${docsPath}`;
+          const message = `No docs file found for ${controllerClass.name}. Expected: ${docsPath}`;
           if (strict) throw new Error(`[nestjs-docfy] ${message}`, { cause: err });
           DocfyModule.logger.warn(message);
         } else {
           // Unexpected error (syntax error inside the docs file, missing dependency, etc.)
-          DocfyModule.logger.error(
-            `Failed to load docs file for ${controllerClass.name}: ${docsPath}`,
-            err,
-          );
+          DocfyModule.logger.error(`Failed to load docs file for ${controllerClass.name}: ${docsPath}`, err);
           throw err;
         }
       }

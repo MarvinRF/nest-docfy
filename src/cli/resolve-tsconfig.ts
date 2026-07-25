@@ -3,11 +3,7 @@ import path from 'path';
 import { assertWithinRoot } from './parse-args';
 import { ConfigNotFoundError } from './errors';
 
-const CANDIDATES = [
-  'tsconfig.build.json',
-  'tsconfig.app.json',
-  'tsconfig.json',
-];
+const CANDIDATES = ['tsconfig.build.json', 'tsconfig.app.json', 'tsconfig.json'];
 
 /**
  * Resolves the best tsconfig for a given app root, validating the result
@@ -28,7 +24,5 @@ export function resolveTsconfig(appRoot: string, projectRoot: string): string {
       continue;
     }
   }
-  throw new ConfigNotFoundError(
-    `No tsconfig found in "${appRoot}". Tried: ${CANDIDATES.join(', ')}`,
-  );
+  throw new ConfigNotFoundError(`No tsconfig found in "${appRoot}". Tried: ${CANDIDATES.join(', ')}`);
 }

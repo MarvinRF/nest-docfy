@@ -118,7 +118,11 @@ export function scanApp(
       for (const cls of classes) {
         // Only process classes decorated with @Controller
         const hasController = cls.getDecorators().some((d) => {
-          try { return d.getName() === 'Controller'; } catch { return false; }
+          try {
+            return d.getName() === 'Controller';
+          } catch {
+            return false;
+          }
         });
         if (!hasController) continue;
 
@@ -131,7 +135,12 @@ export function scanApp(
 
         const docsFilePath = deriveDocsFilePath(filePath, format);
         const hasDocsFile = (() => {
-          try { fs.accessSync(docsFilePath); return true; } catch { return false; }
+          try {
+            fs.accessSync(docsFilePath);
+            return true;
+          } catch {
+            return false;
+          }
         })();
 
         controllers.push({

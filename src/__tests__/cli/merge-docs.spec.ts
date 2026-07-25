@@ -83,8 +83,16 @@ describe('mergeDocsFile()', () => {
     const ctrl = makeCtrl(['findAll']);
     ctrl.methods.push({
       name: 'evil); process.exit(1);//',
-      httpDecorator: null, httpPath: null, params: [],
-      returnType: 'void', responseType: null, isAsync: false, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
+      httpDecorator: null,
+      httpPath: null,
+      params: [],
+      returnType: 'void',
+      responseType: null,
+      isAsync: false,
+      httpStatusCode: null,
+      isInherited: false,
+      inheritedFrom: null,
+      requiresAuth: false,
     });
     const result = mergeDocsFile(EXISTING, ctrl)!;
     expect(result.content).not.toContain('process.exit');

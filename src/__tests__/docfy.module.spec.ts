@@ -59,9 +59,7 @@ describe('DocfyModule._loadAllDocs()', () => {
     class OrphanController {}
     DocfyRegistry.add(OrphanController);
 
-    expect(() =>
-      DocfyModule._loadAllDocs({ strict: true }, mockRequire, () => ({})),
-    ).toThrow('[nestjs-docfy]');
+    expect(() => DocfyModule._loadAllDocs({ strict: true }, mockRequire, () => ({}))).toThrow('[nestjs-docfy]');
   });
 
   describe('MODULE_NOT_FOUND handling', () => {
@@ -71,7 +69,9 @@ describe('DocfyModule._loadAllDocs()', () => {
       const cache = makeCache('/app/no.controller.js', NoDocsController);
       const docsPath = '/app/no.controller.docs.js';
 
-      mockRequire.mockImplementation(() => { throw moduleNotFoundError(docsPath); });
+      mockRequire.mockImplementation(() => {
+        throw moduleNotFoundError(docsPath);
+      });
 
       expect(() => DocfyModule._loadAllDocs({}, mockRequire, cache)).not.toThrow();
     });
@@ -82,11 +82,11 @@ describe('DocfyModule._loadAllDocs()', () => {
       const cache = makeCache('/app/strict.controller.js', StrictNoDocsController);
       const docsPath = '/app/strict.controller.docs.js';
 
-      mockRequire.mockImplementation(() => { throw moduleNotFoundError(docsPath); });
+      mockRequire.mockImplementation(() => {
+        throw moduleNotFoundError(docsPath);
+      });
 
-      expect(() =>
-        DocfyModule._loadAllDocs({ strict: true }, mockRequire, cache),
-      ).toThrow('[nestjs-docfy]');
+      expect(() => DocfyModule._loadAllDocs({ strict: true }, mockRequire, cache)).toThrow('[nestjs-docfy]');
     });
 
     it('rethrows MODULE_NOT_FOUND for a missing dependency inside the docs file', () => {
@@ -99,9 +99,9 @@ describe('DocfyModule._loadAllDocs()', () => {
         throw moduleNotFoundError('/app/some-missing-dep');
       });
 
-      expect(() =>
-        DocfyModule._loadAllDocs({}, mockRequire, cache),
-      ).toThrow("Cannot find module '/app/some-missing-dep'");
+      expect(() => DocfyModule._loadAllDocs({}, mockRequire, cache)).toThrow(
+        "Cannot find module '/app/some-missing-dep'",
+      );
     });
 
     it('rethrows a missing dependency even when docsPath also appears in the error\'s "Require stack" trailer', () => {
@@ -122,9 +122,7 @@ describe('DocfyModule._loadAllDocs()', () => {
         );
       });
 
-      expect(() => DocfyModule._loadAllDocs({}, mockRequire, cache)).toThrow(
-        "Cannot find module './sibling'",
-      );
+      expect(() => DocfyModule._loadAllDocs({}, mockRequire, cache)).toThrow("Cannot find module './sibling'");
     });
   });
 
@@ -133,7 +131,9 @@ describe('DocfyModule._loadAllDocs()', () => {
     DocfyRegistry.add(BadController);
     const cache = makeCache('/app/bad.controller.js', BadController);
 
-    mockRequire.mockImplementation(() => { throw new Error('SyntaxError: Unexpected token'); });
+    mockRequire.mockImplementation(() => {
+      throw new Error('SyntaxError: Unexpected token');
+    });
 
     expect(() => DocfyModule._loadAllDocs({}, mockRequire, cache)).toThrow('SyntaxError');
   });

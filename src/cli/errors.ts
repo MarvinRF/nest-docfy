@@ -16,10 +16,7 @@ export class CliError extends Error {
 
 export class PathTraversalError extends CliError {
   constructor(offendingPath: string) {
-    super(
-      `Path traversal detected: "${offendingPath}" resolves outside the project root.`,
-      CliExitCode.Fatal,
-    );
+    super(`Path traversal detected: "${offendingPath}" resolves outside the project root.`, CliExitCode.Fatal);
     this.name = 'PathTraversalError';
   }
 }

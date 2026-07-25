@@ -19,10 +19,7 @@ export interface MergeResult {
  * If the existing file cannot be parsed or the `docs()` call cannot be
  * located, returns null so the caller can fall back to overwrite.
  */
-export function mergeDocsFile(
-  existingContent: string,
-  ctrl: ControllerInfo,
-): MergeResult | null {
+export function mergeDocsFile(existingContent: string, ctrl: ControllerInfo): MergeResult | null {
   let project: Project;
   try {
     project = new Project({ useInMemoryFileSystem: true, skipFileDependencyResolution: true });
@@ -65,8 +62,7 @@ export function mergeDocsFile(
 
   // Get the methods object literal
   const methodsValue = methodsProp.getChildrenOfKind(SyntaxKind.ObjectLiteralExpression)[0] as
-    | ObjectLiteralExpression
-    | undefined;
+    ObjectLiteralExpression | undefined;
 
   if (!methodsValue) return null;
 

@@ -42,7 +42,11 @@ describe('getDocumentedMethods()', () => {
   const DOCS_PATH = '/tmp/nestjs-docfy-test-check.docs.ts';
 
   afterEach(() => {
-    try { fs.unlinkSync(DOCS_PATH); } catch { /* ignore */ }
+    try {
+      fs.unlinkSync(DOCS_PATH);
+    } catch {
+      /* ignore */
+    }
   });
 
   it('returns empty set when file does not exist', () => {
@@ -51,19 +55,23 @@ describe('getDocumentedMethods()', () => {
   });
 
   it('detects method names from a typical generated docs file', () => {
-    fs.writeFileSync(DOCS_PATH, [
-      "import { docs } from 'nestjs-docfy';",
-      "docs(UsersController, {",
-      "  methods: {",
-      "    findAll: [",
-      "      ApiOperation({ summary: 'Find all' }),",
-      "    ],",
-      "    create: [",
-      "      ApiOperation({ summary: 'Create' }),",
-      "    ],",
-      "  },",
-      "});",
-    ].join('\n'), 'utf8');
+    fs.writeFileSync(
+      DOCS_PATH,
+      [
+        "import { docs } from 'nestjs-docfy';",
+        'docs(UsersController, {',
+        '  methods: {',
+        '    findAll: [',
+        "      ApiOperation({ summary: 'Find all' }),",
+        '    ],',
+        '    create: [',
+        "      ApiOperation({ summary: 'Create' }),",
+        '    ],',
+        '  },',
+        '});',
+      ].join('\n'),
+      'utf8',
+    );
 
     const result = getDocumentedMethods(DOCS_PATH);
     expect(result.has('findAll')).toBe(true);
@@ -72,17 +80,21 @@ describe('getDocumentedMethods()', () => {
   });
 
   it('does not count classDecorators as a method', () => {
-    fs.writeFileSync(DOCS_PATH, [
-      "docs(Controller, {",
-      "  classDecorators: [",
-      "    ApiTags('users'),",
-      "  ],",
-      "  methods: {",
-      "    findOne: [",
-      "    ],",
-      "  },",
-      "});",
-    ].join('\n'), 'utf8');
+    fs.writeFileSync(
+      DOCS_PATH,
+      [
+        'docs(Controller, {',
+        '  classDecorators: [',
+        "    ApiTags('users'),",
+        '  ],',
+        '  methods: {',
+        '    findOne: [',
+        '    ],',
+        '  },',
+        '});',
+      ].join('\n'),
+      'utf8',
+    );
 
     const result = getDocumentedMethods(DOCS_PATH);
     expect(result.has('findOne')).toBe(true);
@@ -93,13 +105,7 @@ describe('getDocumentedMethods()', () => {
 
   it('rejects names that are not valid identifiers (security)', () => {
     // Craft a docs file with a malicious-looking method name
-    fs.writeFileSync(DOCS_PATH, [
-      "docs(Ctrl, {",
-      "  methods: {",
-      "    valid: [",
-      "  },",
-      "});",
-    ].join('\n'), 'utf8');
+    fs.writeFileSync(DOCS_PATH, ['docs(Ctrl, {', '  methods: {', '    valid: [', '  },', '});'].join('\n'), 'utf8');
 
     const result = getDocumentedMethods(DOCS_PATH);
     expect(result.has('valid')).toBe(true);
@@ -118,18 +124,19 @@ describe('checkControllers()', () => {
   const DOCS_PATH = '/tmp/nestjs-docfy-test-check-ctrl.docs.ts';
 
   afterEach(() => {
-    try { fs.unlinkSync(DOCS_PATH); } catch { /* ignore */ }
+    try {
+      fs.unlinkSync(DOCS_PATH);
+    } catch {
+      /* ignore */
+    }
   });
 
   it('returns no issues when all controllers are fully documented', () => {
-    fs.writeFileSync(DOCS_PATH, [
-      "docs(UsersController, {",
-      "  methods: {",
-      "    findAll: [",
-      "    ],",
-      "  },",
-      "});",
-    ].join('\n'), 'utf8');
+    fs.writeFileSync(
+      DOCS_PATH,
+      ['docs(UsersController, {', '  methods: {', '    findAll: [', '    ],', '  },', '});'].join('\n'),
+      'utf8',
+    );
 
     const ctrl = makeCtrl({
       filePath: DOCS_PATH.replace('.docs.ts', '.ts'),
@@ -164,14 +171,11 @@ describe('checkControllers()', () => {
   });
 
   it('reports undocumented-methods when controller has new methods', () => {
-    fs.writeFileSync(DOCS_PATH, [
-      "docs(UsersController, {",
-      "  methods: {",
-      "    findAll: [",
-      "    ],",
-      "  },",
-      "});",
-    ].join('\n'), 'utf8');
+    fs.writeFileSync(
+      DOCS_PATH,
+      ['docs(UsersController, {', '  methods: {', '    findAll: [', '    ],', '  },', '});'].join('\n'),
+      'utf8',
+    );
 
     const ctrl = makeCtrl({
       filePath: DOCS_PATH.replace('.docs.ts', '.ts'),
@@ -190,14 +194,11 @@ describe('checkControllers()', () => {
   });
 
   it('ignores non-HTTP methods (private helpers, etc.)', () => {
-    fs.writeFileSync(DOCS_PATH, [
-      "docs(UsersController, {",
-      "  methods: {",
-      "    findAll: [",
-      "    ],",
-      "  },",
-      "});",
-    ].join('\n'), 'utf8');
+    fs.writeFileSync(
+      DOCS_PATH,
+      ['docs(UsersController, {', '  methods: {', '    findAll: [', '    ],', '  },', '});'].join('\n'),
+      'utf8',
+    );
 
     const ctrl = makeCtrl({
       filePath: DOCS_PATH.replace('.docs.ts', '.ts'),
@@ -233,16 +234,12 @@ describe('checkControllers()', () => {
   });
 
   it('skips method names with invalid identifiers (security)', () => {
-    fs.writeFileSync(DOCS_PATH, [
-      "docs(UsersController, { methods: {} });",
-    ].join('\n'), 'utf8');
+    fs.writeFileSync(DOCS_PATH, ['docs(UsersController, { methods: {} });'].join('\n'), 'utf8');
 
     const ctrl = makeCtrl({
       filePath: DOCS_PATH.replace('.docs.ts', '.ts'),
       hasDocsFile: true,
-      methods: [
-        { ...makeMethod('evil); process.exit(1);//', 'Get') },
-      ],
+      methods: [{ ...makeMethod('evil); process.exit(1);//', 'Get') }],
     });
 
     // Should not crash and should not produce an issue for the invalid name

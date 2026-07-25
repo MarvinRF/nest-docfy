@@ -28,10 +28,7 @@ export interface WriterOptions {
  * Resolves the output path for a docs file, applying --out dir override
  * when present, and validating the result stays within the project root.
  */
-function resolveOutputPath(
-  ctrl: ControllerInfo,
-  opts: WriterOptions,
-): string {
+function resolveOutputPath(ctrl: ControllerInfo, opts: WriterOptions): string {
   const derived = deriveDocsFilePath(ctrl.filePath, opts.format);
 
   if (!opts.outDir) return derived;
@@ -42,15 +39,11 @@ function resolveOutputPath(
   return outPath;
 }
 
-
 /**
  * Writes (or previews) the docs file for a single controller.
  * Handles: create, skip, merge (--force), dry-run.
  */
-export function writeDocsFile(
-  ctrl: ControllerInfo,
-  opts: WriterOptions,
-): WriteResult {
+export function writeDocsFile(ctrl: ControllerInfo, opts: WriterOptions): WriteResult {
   let docsFilePath: string;
   try {
     docsFilePath = resolveOutputPath(ctrl, opts);
@@ -65,7 +58,12 @@ export function writeDocsFile(
   }
 
   const exists = (() => {
-    try { fs.accessSync(docsFilePath); return true; } catch { return false; }
+    try {
+      fs.accessSync(docsFilePath);
+      return true;
+    } catch {
+      return false;
+    }
   })();
 
   // --- DRY RUN ---
@@ -129,9 +127,6 @@ export function writeDocsFile(
 /**
  * Writes docs files for all controllers and returns aggregated results.
  */
-export function writeAllDocs(
-  controllers: ControllerInfo[],
-  opts: WriterOptions,
-): WriteResult[] {
+export function writeAllDocs(controllers: ControllerInfo[], opts: WriterOptions): WriteResult[] {
   return controllers.map((ctrl) => writeDocsFile(ctrl, opts));
 }

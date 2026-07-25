@@ -42,7 +42,11 @@ describe('computeCoverage()', () => {
   const DOCS_PATH = '/tmp/nestjs-docfy-test-coverage.docs.ts';
 
   afterEach(() => {
-    try { fs.unlinkSync(DOCS_PATH); } catch { /* ignore */ }
+    try {
+      fs.unlinkSync(DOCS_PATH);
+    } catch {
+      /* ignore */
+    }
   });
 
   it('returns NaN coveragePercent when there are no endpoints', () => {
@@ -58,10 +62,7 @@ describe('computeCoverage()', () => {
 
   it('ignores non-HTTP methods in endpoint count', () => {
     const ctrl = makeCtrl({
-      methods: [
-        makeMethod('findAll', 'Get'),
-        makeMethod('helperMethod', null),
-      ],
+      methods: [makeMethod('findAll', 'Get'), makeMethod('helperMethod', null)],
     });
     const report = computeCoverage([ctrl], 'ts');
 
@@ -83,16 +84,20 @@ describe('computeCoverage()', () => {
   });
 
   it('reports 100% when all methods are documented', () => {
-    fs.writeFileSync(DOCS_PATH, [
-      "docs(UsersController, {",
-      "  methods: {",
-      "    findAll: [",
-      "    ],",
-      "    create: [",
-      "    ],",
-      "  },",
-      "});",
-    ].join('\n'), 'utf8');
+    fs.writeFileSync(
+      DOCS_PATH,
+      [
+        'docs(UsersController, {',
+        '  methods: {',
+        '    findAll: [',
+        '    ],',
+        '    create: [',
+        '    ],',
+        '  },',
+        '});',
+      ].join('\n'),
+      'utf8',
+    );
 
     const ctrl = makeCtrl({
       filePath: DOCS_PATH.replace('.docs.ts', '.ts'),
@@ -108,14 +113,11 @@ describe('computeCoverage()', () => {
   });
 
   it('reports partial coverage correctly (1 of 2 documented = 50%)', () => {
-    fs.writeFileSync(DOCS_PATH, [
-      "docs(UsersController, {",
-      "  methods: {",
-      "    findAll: [",
-      "    ],",
-      "  },",
-      "});",
-    ].join('\n'), 'utf8');
+    fs.writeFileSync(
+      DOCS_PATH,
+      ['docs(UsersController, {', '  methods: {', '    findAll: [', '    ],', '  },', '});'].join('\n'),
+      'utf8',
+    );
 
     const ctrl = makeCtrl({
       filePath: DOCS_PATH.replace('.docs.ts', '.ts'),
@@ -131,14 +133,11 @@ describe('computeCoverage()', () => {
   });
 
   it('aggregates across multiple controllers', () => {
-    fs.writeFileSync(DOCS_PATH, [
-      "docs(UsersController, {",
-      "  methods: {",
-      "    findAll: [",
-      "    ],",
-      "  },",
-      "});",
-    ].join('\n'), 'utf8');
+    fs.writeFileSync(
+      DOCS_PATH,
+      ['docs(UsersController, {', '  methods: {', '    findAll: [', '    ],', '  },', '});'].join('\n'),
+      'utf8',
+    );
 
     const ctrlA = makeCtrl({
       className: 'UsersController',
@@ -163,14 +162,11 @@ describe('computeCoverage()', () => {
   });
 
   it('rounds to one decimal place (e.g. 1 of 3 → 33.3%)', () => {
-    fs.writeFileSync(DOCS_PATH, [
-      "docs(UsersController, {",
-      "  methods: {",
-      "    findAll: [",
-      "    ],",
-      "  },",
-      "});",
-    ].join('\n'), 'utf8');
+    fs.writeFileSync(
+      DOCS_PATH,
+      ['docs(UsersController, {', '  methods: {', '    findAll: [', '    ],', '  },', '});'].join('\n'),
+      'utf8',
+    );
 
     const ctrl = makeCtrl({
       filePath: DOCS_PATH.replace('.docs.ts', '.ts'),

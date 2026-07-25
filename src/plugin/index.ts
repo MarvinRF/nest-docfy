@@ -32,10 +32,7 @@ export interface DocfyPluginOptions {
  * `patch-spec` does, just automatic on every build instead of a separate
  * manual CLI invocation.
  */
-export function before(
-  options: DocfyPluginOptions = {},
-  program?: ts.Program,
-): ts.TransformerFactory<ts.SourceFile> {
+export function before(options: DocfyPluginOptions = {}, program?: ts.Program): ts.TransformerFactory<ts.SourceFile> {
   if (!program) {
     throw new Error(
       'nestjs-docfy plugin: the "program" reference must be provided when using the CLI plugin. ' +

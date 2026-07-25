@@ -47,22 +47,23 @@ export function generateDocfyMetadata(options: GenerateMetadataOptions): Generat
   };
 
   const { controllers, errors: scanErrors } = scanApp(app, options.projectRoot, options.controllerGlob, 'ts');
-  const { patch, controllersWithoutDocs, unparseableDocsFiles } = computeSpecPatch(controllers, 'ts', (absolutePath) => {
-    try {
-      return fs.readFileSync(absolutePath, 'utf8');
-    } catch {
-      return null;
-    }
-  });
+  const { patch, controllersWithoutDocs, unparseableDocsFiles } = computeSpecPatch(
+    controllers,
+    'ts',
+    (absolutePath) => {
+      try {
+        return fs.readFileSync(absolutePath, 'utf8');
+      } catch {
+        return null;
+      }
+    },
+  );
 
   fs.mkdirSync(options.outDir, { recursive: true });
   const outFile = path.join(options.outDir, DOCFY_METADATA_FILENAME);
   fs.writeFileSync(outFile, JSON.stringify(patch, null, 2), 'utf8');
 
-  const patchedOperationCount = Object.values(patch).reduce(
-    (count, methods) => count + Object.keys(methods).length,
-    0,
-  );
+  const patchedOperationCount = Object.values(patch).reduce((count, methods) => count + Object.keys(methods).length, 0);
 
   return { outFile, patchedOperationCount, controllersWithoutDocs, unparseableDocsFiles, scanErrors };
 }

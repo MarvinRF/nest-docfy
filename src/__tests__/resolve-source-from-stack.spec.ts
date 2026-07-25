@@ -31,7 +31,7 @@ describe('parseCallSite()', () => {
     expect(loc).toEqual({ file: '/app/dist/apps/api-gateway/main.js', line: 842, column: 18 });
   });
 
-  it('always skips the capturing function\'s own frame, positionally, even after bundling collapses everything into one file', () => {
+  it("always skips the capturing function's own frame, positionally, even after bundling collapses everything into one file", () => {
     // Post-bundling, the decorator's own frame and the real caller's frame
     // report the *same* file — only line/column differ — so a path-based
     // skip can't tell them apart; the positional skip still can.
@@ -45,7 +45,7 @@ describe('parseCallSite()', () => {
     expect(loc).toEqual({ file: '/app/dist/main.js', line: 842, column: 18 });
   });
 
-  it('skips frames inside node_modules beyond the capturing function\'s own frame', () => {
+  it("skips frames inside node_modules beyond the capturing function's own frame", () => {
     const stack = [
       'Error',
       '    at WithDocs (/app/src/with-docs.decorator.js:10:5)',
@@ -121,7 +121,7 @@ describe('resolveOriginalPath()', () => {
     expect(resolved).toBe(path.resolve(tmpDir, originalRelativePath));
   });
 
-  it('resolves webpack:// namespace URIs (NestJS CLI\'s actual source-map format) relative to cwd, not the bundle dir', () => {
+  it("resolves webpack:// namespace URIs (NestJS CLI's actual source-map format) relative to cwd, not the bundle dir", () => {
     const bundleFile = path.join(tmpDir, 'main.js');
 
     const generator = new SourceMapGenerator({ file: 'main.js' });
@@ -138,9 +138,7 @@ describe('resolveOriginalPath()', () => {
     const cwdSpy = jest.spyOn(process, 'cwd').mockReturnValue(tmpDir);
     try {
       const resolved = resolveOriginalPath({ file: bundleFile, line: 50, column: 0 });
-      expect(resolved).toBe(
-        path.resolve(tmpDir, 'apps/api-gateway/src/auth/auth.controller.ts'),
-      );
+      expect(resolved).toBe(path.resolve(tmpDir, 'apps/api-gateway/src/auth/auth.controller.ts'));
     } finally {
       cwdSpy.mockRestore();
     }

@@ -46,7 +46,7 @@ docs(UsersController, {
 `;
 
 describe('computePatchedDocument()', () => {
-  it('patches the matching operation using the controller\'s docs file content', () => {
+  it("patches the matching operation using the controller's docs file content", () => {
     const result = computePatchedDocument(BASE_DOCUMENT, [makeCtrl()], 'ts', () => DOCS_FILE);
     expect(result.document.paths!['/users'].get).toMatchObject({
       summary: 'List users',
@@ -89,7 +89,9 @@ describe('computePatchedDocument()', () => {
       },
     };
     const readDocsFile = (path: string) =>
-      path.includes('users') ? DOCS_FILE : `docs(OrdersController, { classDecorators: [ApiTags('orders')], methods: { findAll: [] } });`;
+      path.includes('users')
+        ? DOCS_FILE
+        : `docs(OrdersController, { classDecorators: [ApiTags('orders')], methods: { findAll: [] } });`;
 
     const result = computePatchedDocument(doc, [makeCtrl(), ordersCtrl], 'ts', readDocsFile);
     expect(result.document.paths!['/users'].get.tags).toEqual(['users']);
@@ -122,15 +124,10 @@ describe('computePatchedDocument()', () => {
     `;
 
     let call = 0;
-    const result = computePatchedDocument(
-      BASE_DOCUMENT,
-      [richController, sparseController],
-      'ts',
-      () => {
-        call += 1;
-        return call === 1 ? richDocs : sparseDocs;
-      },
-    );
+    const result = computePatchedDocument(BASE_DOCUMENT, [richController, sparseController], 'ts', () => {
+      call += 1;
+      return call === 1 ? richDocs : sparseDocs;
+    });
 
     expect(result.document.paths!['/users'].get.responses!['200'].content).toEqual({
       'application/json': { schema: { type: 'object', properties: { ok: { type: 'boolean' } } } },

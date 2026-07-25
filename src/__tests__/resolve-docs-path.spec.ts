@@ -13,18 +13,14 @@ describe('resolveDocsPath()', () => {
     class UsersController {}
     const readCache = makeCache('/app/dist/users/users.controller.js', UsersController);
 
-    expect(resolveDocsPath(UsersController, readCache)).toBe(
-      '/app/dist/users/users.controller.docs.js',
-    );
+    expect(resolveDocsPath(UsersController, readCache)).toBe('/app/dist/users/users.controller.docs.js');
   });
 
   it('derives .docs.ts path when running under ts-node', () => {
     class UsersControllerTs {}
     const readCache = makeCache('/app/src/users/users.controller.ts', UsersControllerTs);
 
-    expect(resolveDocsPath(UsersControllerTs, readCache)).toBe(
-      '/app/src/users/users.controller.docs.ts',
-    );
+    expect(resolveDocsPath(UsersControllerTs, readCache)).toBe('/app/src/users/users.controller.docs.ts');
   });
 
   it('returns null when the class is not found in the cache', () => {
@@ -43,9 +39,7 @@ describe('resolveDocsPath()', () => {
     class ItemsController {}
     const readCache = makeCache('/my.app/src/v1/items.controller.js', ItemsController);
 
-    expect(resolveDocsPath(ItemsController, readCache)).toBe(
-      '/my.app/src/v1/items.controller.docs.js',
-    );
+    expect(resolveDocsPath(ItemsController, readCache)).toBe('/my.app/src/v1/items.controller.docs.js');
   });
 
   it('handles a module directly exporting multiple controllers', () => {
@@ -72,9 +66,7 @@ describe('resolveDocsPath()', () => {
       },
     });
 
-    expect(resolveDocsPath(UsersController, readCache)).toBe(
-      '/app/src/users/users.controller.docs.ts',
-    );
+    expect(resolveDocsPath(UsersController, readCache)).toBe('/app/src/users/users.controller.docs.ts');
   });
 
   it('falls back to the first candidate when no .controller. file is found among duplicates', () => {

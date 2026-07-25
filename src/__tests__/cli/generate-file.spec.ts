@@ -17,7 +17,8 @@ function makeCtrl(overrides: Partial<ControllerInfo> = {}): ControllerInfo {
         returnType: 'Promise<string[]>',
         responseType: null,
         isAsync: true,
-        httpStatusCode: null, isInherited: false,
+        httpStatusCode: null,
+        isInherited: false,
         inheritedFrom: null,
         requiresAuth: false,
       },
@@ -29,7 +30,8 @@ function makeCtrl(overrides: Partial<ControllerInfo> = {}): ControllerInfo {
         returnType: 'Promise<string>',
         responseType: null,
         isAsync: true,
-        httpStatusCode: null, isInherited: false,
+        httpStatusCode: null,
+        isInherited: false,
         inheritedFrom: null,
         requiresAuth: false,
       },
@@ -134,11 +136,21 @@ describe('renderDocsFile() — security: sanitisation', () => {
 
   it('does not inject code via malicious method name', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'evil`); process.exit(1);//',
-        httpDecorator: null, httpPath: null, params: [],
-        returnType: 'void', responseType: null, isAsync: false, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'evil`); process.exit(1);//',
+          httpDecorator: null,
+          httpPath: null,
+          params: [],
+          returnType: 'void',
+          responseType: null,
+          isAsync: false,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).not.toContain('process.exit');
@@ -152,7 +164,9 @@ describe('renderDocsFile() — security: sanitisation', () => {
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     // The dangerous characters ' and ) must not appear outside of a comment context
     // We verify the import/docs() call lines are not corrupted
-    const codeLines = output.split('\n').filter((l) => !l.trimStart().startsWith('//') && !l.trimStart().startsWith('*'));
+    const codeLines = output
+      .split('\n')
+      .filter((l) => !l.trimStart().startsWith('//') && !l.trimStart().startsWith('*'));
     expect(codeLines.join('\n')).not.toContain("require('child_process')");
   });
 
@@ -160,12 +174,21 @@ describe('renderDocsFile() — security: sanitisation', () => {
     // returnType appears in a line comment — the real risk is closing a block
     // comment with */ and injecting code after it. Verify * is stripped.
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'findAll',
-        httpDecorator: 'Get', httpPath: null, params: [],
-        returnType: '*/ require("child_process").execSync("id") /*',
-        responseType: null, isAsync: false, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'findAll',
+          httpDecorator: 'Get',
+          httpPath: null,
+          params: [],
+          returnType: '*/ require("child_process").execSync("id") /*',
+          responseType: null,
+          isAsync: false,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     // * is stripped by sanitizeComment, so */ cannot appear from returnType
@@ -187,12 +210,21 @@ describe('renderDocsFile() — edge cases', () => {
 
   it('handles inherited method with inheritedFrom label', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'findAll',
-        httpDecorator: 'Get', httpPath: null, params: [],
-        returnType: 'unknown',
-        responseType: null, isAsync: false, httpStatusCode: null, isInherited: true, inheritedFrom: 'CrudBase', requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'findAll',
+          httpDecorator: 'Get',
+          httpPath: null,
+          params: [],
+          returnType: 'unknown',
+          responseType: null,
+          isAsync: false,
+          httpStatusCode: null,
+          isInherited: true,
+          inheritedFrom: 'CrudBase',
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).toContain('CrudBase');
@@ -249,15 +281,21 @@ describe('renderDocsFile() — responseType', () => {
 
   it('renders ApiResponse with type for a named DTO', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'findOne',
-        httpDecorator: 'Get',
-        httpPath: ':id',
-        params: [],
-        returnType: 'Promise<UserResponseDto>',
-        responseType: { name: 'UserResponseDto', absolutePath: DTO_PATH, isArray: false, isInterface: false },
-        isAsync: true, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'findOne',
+          httpDecorator: 'Get',
+          httpPath: ':id',
+          params: [],
+          returnType: 'Promise<UserResponseDto>',
+          responseType: { name: 'UserResponseDto', absolutePath: DTO_PATH, isArray: false, isInterface: false },
+          isAsync: true,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).toContain("ApiResponse({ status: 200, description: 'OK', type: UserResponseDto })");
@@ -265,15 +303,21 @@ describe('renderDocsFile() — responseType', () => {
 
   it('renders ApiResponse with array type for DTO[]', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'findAll',
-        httpDecorator: 'Get',
-        httpPath: '',
-        params: [],
-        returnType: 'Promise<UserResponseDto[]>',
-        responseType: { name: 'UserResponseDto', absolutePath: DTO_PATH, isArray: true, isInterface: false },
-        isAsync: true, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'findAll',
+          httpDecorator: 'Get',
+          httpPath: '',
+          params: [],
+          returnType: 'Promise<UserResponseDto[]>',
+          responseType: { name: 'UserResponseDto', absolutePath: DTO_PATH, isArray: true, isInterface: false },
+          isAsync: true,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).toContain("ApiResponse({ status: 200, description: 'OK', type: [UserResponseDto] })");
@@ -281,15 +325,21 @@ describe('renderDocsFile() — responseType', () => {
 
   it('adds import for the DTO when responseType is set', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'findOne',
-        httpDecorator: 'Get',
-        httpPath: ':id',
-        params: [],
-        returnType: 'Promise<UserResponseDto>',
-        responseType: { name: 'UserResponseDto', absolutePath: DTO_PATH, isArray: false, isInterface: false },
-        isAsync: true, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'findOne',
+          httpDecorator: 'Get',
+          httpPath: ':id',
+          params: [],
+          returnType: 'Promise<UserResponseDto>',
+          responseType: { name: 'UserResponseDto', absolutePath: DTO_PATH, isArray: false, isInterface: false },
+          isAsync: true,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).toContain("import { UserResponseDto } from './user-response.dto'");
@@ -300,17 +350,29 @@ describe('renderDocsFile() — responseType', () => {
       methods: [
         {
           name: 'findOne',
-          httpDecorator: 'Get', httpPath: ':id', params: [],
+          httpDecorator: 'Get',
+          httpPath: ':id',
+          params: [],
           returnType: 'Promise<UserResponseDto>',
           responseType: { name: 'UserResponseDto', absolutePath: DTO_PATH, isArray: false, isInterface: false },
-          isAsync: true, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
+          isAsync: true,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
         },
         {
           name: 'update',
-          httpDecorator: 'Put', httpPath: ':id', params: [],
+          httpDecorator: 'Put',
+          httpPath: ':id',
+          params: [],
           returnType: 'Promise<UserResponseDto>',
           responseType: { name: 'UserResponseDto', absolutePath: DTO_PATH, isArray: false, isInterface: false },
-          isAsync: true, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
+          isAsync: true,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
         },
       ],
     });
@@ -321,13 +383,21 @@ describe('renderDocsFile() — responseType', () => {
 
   it('falls back to ApiResponse without type for null responseType', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'findAll',
-        httpDecorator: 'Get', httpPath: '', params: [],
-        returnType: 'Promise<string[]>',
-        responseType: null,
-        isAsync: true, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'findAll',
+          httpDecorator: 'Get',
+          httpPath: '',
+          params: [],
+          returnType: 'Promise<string[]>',
+          responseType: null,
+          isAsync: true,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).toContain("ApiResponse({ status: 200, description: 'OK' })");
@@ -336,13 +406,21 @@ describe('renderDocsFile() — responseType', () => {
 
   it('skips import for responseType with invalid identifier name', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'findOne',
-        httpDecorator: 'Get', httpPath: ':id', params: [],
-        returnType: 'Promise<unknown>',
-        responseType: { name: '123Invalid', absolutePath: DTO_PATH, isArray: false, isInterface: false },
-        isAsync: true, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'findOne',
+          httpDecorator: 'Get',
+          httpPath: ':id',
+          params: [],
+          returnType: 'Promise<unknown>',
+          responseType: { name: '123Invalid', absolutePath: DTO_PATH, isArray: false, isInterface: false },
+          isAsync: true,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).not.toContain('123Invalid');
@@ -352,13 +430,26 @@ describe('renderDocsFile() — responseType', () => {
   it('renders correct import path for cross-directory DTO', () => {
     const crossDirDtoPath = '/project/src/dto/shared-response.dto.ts';
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'getShared',
-        httpDecorator: 'Get', httpPath: 'shared', params: [],
-        returnType: 'Promise<SharedResponseDto>',
-        responseType: { name: 'SharedResponseDto', absolutePath: crossDirDtoPath, isArray: false, isInterface: false },
-        isAsync: true, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'getShared',
+          httpDecorator: 'Get',
+          httpPath: 'shared',
+          params: [],
+          returnType: 'Promise<SharedResponseDto>',
+          responseType: {
+            name: 'SharedResponseDto',
+            absolutePath: crossDirDtoPath,
+            isArray: false,
+            isInterface: false,
+          },
+          isAsync: true,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).toContain("import { SharedResponseDto } from '../dto/shared-response.dto'");
@@ -366,13 +457,21 @@ describe('renderDocsFile() — responseType', () => {
 
   it('renders require() for JS format with responseType', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'findOne',
-        httpDecorator: 'Get', httpPath: ':id', params: [],
-        returnType: 'Promise<UserResponseDto>',
-        responseType: { name: 'UserResponseDto', absolutePath: DTO_PATH, isArray: false, isInterface: false },
-        isAsync: true, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'findOne',
+          httpDecorator: 'Get',
+          httpPath: ':id',
+          params: [],
+          returnType: 'Promise<UserResponseDto>',
+          responseType: { name: 'UserResponseDto', absolutePath: DTO_PATH, isArray: false, isInterface: false },
+          isAsync: true,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH.replace('.ts', '.js'), 'js');
     expect(output).toContain("require('./user-response.dto')");
@@ -402,12 +501,21 @@ function makeParam(
 describe('renderDocsFile() — @ApiParam', () => {
   it('generates ApiParam for @Param with named argument', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'findOne', httpDecorator: 'Get', httpPath: ':id',
-        params: [makeParam({ nestDecorator: '@Param', nestDecoratorArg: 'id', type: 'string' })],
-        returnType: 'string', responseType: null,
-        isAsync: false, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'findOne',
+          httpDecorator: 'Get',
+          httpPath: ':id',
+          params: [makeParam({ nestDecorator: '@Param', nestDecoratorArg: 'id', type: 'string' })],
+          returnType: 'string',
+          responseType: null,
+          isAsync: false,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).toContain("ApiParam({ name: 'id', type: String })");
@@ -415,12 +523,21 @@ describe('renderDocsFile() — @ApiParam', () => {
 
   it('includes ApiParam in swagger import', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'findOne', httpDecorator: 'Get', httpPath: ':id',
-        params: [makeParam({ nestDecorator: '@Param', nestDecoratorArg: 'id', type: 'string' })],
-        returnType: 'string', responseType: null,
-        isAsync: false, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'findOne',
+          httpDecorator: 'Get',
+          httpPath: ':id',
+          params: [makeParam({ nestDecorator: '@Param', nestDecoratorArg: 'id', type: 'string' })],
+          returnType: 'string',
+          responseType: null,
+          isAsync: false,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).toContain('ApiParam');
@@ -429,12 +546,21 @@ describe('renderDocsFile() — @ApiParam', () => {
 
   it('skips ApiParam when @Param has no named argument (object param)', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'findOne', httpDecorator: 'Get', httpPath: ':id',
-        params: [makeParam({ nestDecorator: '@Param', nestDecoratorArg: null, type: 'object' })],
-        returnType: 'string', responseType: null,
-        isAsync: false, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'findOne',
+          httpDecorator: 'Get',
+          httpPath: ':id',
+          params: [makeParam({ nestDecorator: '@Param', nestDecoratorArg: null, type: 'object' })],
+          returnType: 'string',
+          responseType: null,
+          isAsync: false,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).not.toContain('ApiParam');
@@ -442,12 +568,23 @@ describe('renderDocsFile() — @ApiParam', () => {
 
   it('sanitizes malicious param name', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'findOne', httpDecorator: 'Get', httpPath: ':id',
-        params: [makeParam({ nestDecorator: '@Param', nestDecoratorArg: "id'); process.exit(1);//", type: 'string' })],
-        returnType: 'string', responseType: null,
-        isAsync: false, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'findOne',
+          httpDecorator: 'Get',
+          httpPath: ':id',
+          params: [
+            makeParam({ nestDecorator: '@Param', nestDecoratorArg: "id'); process.exit(1);//", type: 'string' }),
+          ],
+          returnType: 'string',
+          responseType: null,
+          isAsync: false,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).not.toContain('process.exit');
@@ -457,12 +594,21 @@ describe('renderDocsFile() — @ApiParam', () => {
 describe('renderDocsFile() — @ApiQuery', () => {
   it('generates ApiQuery for @Query with named argument', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'search', httpDecorator: 'Get', httpPath: '',
-        params: [makeParam({ nestDecorator: '@Query', nestDecoratorArg: 'q', type: 'string' })],
-        returnType: 'string[]', responseType: null,
-        isAsync: false, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'search',
+          httpDecorator: 'Get',
+          httpPath: '',
+          params: [makeParam({ nestDecorator: '@Query', nestDecoratorArg: 'q', type: 'string' })],
+          returnType: 'string[]',
+          responseType: null,
+          isAsync: false,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).toContain("ApiQuery({ name: 'q', type: String");
@@ -470,12 +616,21 @@ describe('renderDocsFile() — @ApiQuery', () => {
 
   it('generates ApiQuery with Number type for numeric query param', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'list', httpDecorator: 'Get', httpPath: '',
-        params: [makeParam({ nestDecorator: '@Query', nestDecoratorArg: 'page', type: 'number' })],
-        returnType: 'string[]', responseType: null,
-        isAsync: false, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'list',
+          httpDecorator: 'Get',
+          httpPath: '',
+          params: [makeParam({ nestDecorator: '@Query', nestDecoratorArg: 'page', type: 'number' })],
+          returnType: 'string[]',
+          responseType: null,
+          isAsync: false,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).toContain("ApiQuery({ name: 'page', type: Number");
@@ -483,12 +638,21 @@ describe('renderDocsFile() — @ApiQuery', () => {
 
   it('includes ApiQuery in swagger import', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'search', httpDecorator: 'Get', httpPath: '',
-        params: [makeParam({ nestDecorator: '@Query', nestDecoratorArg: 'q', type: 'string' })],
-        returnType: 'string[]', responseType: null,
-        isAsync: false, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'search',
+          httpDecorator: 'Get',
+          httpPath: '',
+          params: [makeParam({ nestDecorator: '@Query', nestDecoratorArg: 'q', type: 'string' })],
+          returnType: 'string[]',
+          responseType: null,
+          isAsync: false,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).toMatch(/import \{[^}]*ApiQuery[^}]*\} from '@nestjs\/swagger'/);
@@ -498,15 +662,28 @@ describe('renderDocsFile() — @ApiQuery', () => {
 describe('renderDocsFile() — @ApiBody', () => {
   it('generates ApiBody with DTO type when bodyType is resolved', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'create', httpDecorator: 'Post', httpPath: '',
-        params: [makeParam({
-          nestDecorator: '@Body', nestDecoratorArg: null, type: 'CreateUserDto',
-          bodyType: { name: 'CreateUserDto', absolutePath: DTO_PATH, isArray: false, isInterface: false },
-        })],
-        returnType: 'void', responseType: null,
-        isAsync: true, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'create',
+          httpDecorator: 'Post',
+          httpPath: '',
+          params: [
+            makeParam({
+              nestDecorator: '@Body',
+              nestDecoratorArg: null,
+              type: 'CreateUserDto',
+              bodyType: { name: 'CreateUserDto', absolutePath: DTO_PATH, isArray: false, isInterface: false },
+            }),
+          ],
+          returnType: 'void',
+          responseType: null,
+          isAsync: true,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).toContain('ApiBody({ type: CreateUserDto })');
@@ -514,15 +691,28 @@ describe('renderDocsFile() — @ApiBody', () => {
 
   it('adds import for the body DTO', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'create', httpDecorator: 'Post', httpPath: '',
-        params: [makeParam({
-          nestDecorator: '@Body', nestDecoratorArg: null, type: 'CreateUserDto',
-          bodyType: { name: 'CreateUserDto', absolutePath: DTO_PATH, isArray: false, isInterface: false },
-        })],
-        returnType: 'void', responseType: null,
-        isAsync: true, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'create',
+          httpDecorator: 'Post',
+          httpPath: '',
+          params: [
+            makeParam({
+              nestDecorator: '@Body',
+              nestDecoratorArg: null,
+              type: 'CreateUserDto',
+              bodyType: { name: 'CreateUserDto', absolutePath: DTO_PATH, isArray: false, isInterface: false },
+            }),
+          ],
+          returnType: 'void',
+          responseType: null,
+          isAsync: true,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).toContain("import { CreateUserDto } from './user-request.dto'");
@@ -530,15 +720,28 @@ describe('renderDocsFile() — @ApiBody', () => {
 
   it('includes ApiBody in swagger import', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'create', httpDecorator: 'Post', httpPath: '',
-        params: [makeParam({
-          nestDecorator: '@Body', nestDecoratorArg: null, type: 'CreateUserDto',
-          bodyType: { name: 'CreateUserDto', absolutePath: DTO_PATH, isArray: false, isInterface: false },
-        })],
-        returnType: 'void', responseType: null,
-        isAsync: true, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'create',
+          httpDecorator: 'Post',
+          httpPath: '',
+          params: [
+            makeParam({
+              nestDecorator: '@Body',
+              nestDecoratorArg: null,
+              type: 'CreateUserDto',
+              bodyType: { name: 'CreateUserDto', absolutePath: DTO_PATH, isArray: false, isInterface: false },
+            }),
+          ],
+          returnType: 'void',
+          responseType: null,
+          isAsync: true,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).toMatch(/import \{[^}]*ApiBody[^}]*\} from '@nestjs\/swagger'/);
@@ -546,12 +749,21 @@ describe('renderDocsFile() — @ApiBody', () => {
 
   it('skips ApiBody for @Body with field selector', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'create', httpDecorator: 'Post', httpPath: '',
-        params: [makeParam({ nestDecorator: '@Body', nestDecoratorArg: 'email', type: 'string' })],
-        returnType: 'void', responseType: null,
-        isAsync: true, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'create',
+          httpDecorator: 'Post',
+          httpPath: '',
+          params: [makeParam({ nestDecorator: '@Body', nestDecoratorArg: 'email', type: 'string' })],
+          returnType: 'void',
+          responseType: null,
+          isAsync: true,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).not.toContain('ApiBody');
@@ -559,16 +771,28 @@ describe('renderDocsFile() — @ApiBody', () => {
 
   it('deduplicates import when same DTO used in body and response', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'update', httpDecorator: 'Put', httpPath: ':id',
-        params: [makeParam({
-          nestDecorator: '@Body', nestDecoratorArg: null, type: 'UserDto',
-          bodyType: { name: 'UserDto', absolutePath: DTO_PATH, isArray: false, isInterface: false },
-        })],
-        returnType: 'Promise<UserDto>',
-        responseType: { name: 'UserDto', absolutePath: DTO_PATH, isArray: false, isInterface: false },
-        isAsync: true, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'update',
+          httpDecorator: 'Put',
+          httpPath: ':id',
+          params: [
+            makeParam({
+              nestDecorator: '@Body',
+              nestDecoratorArg: null,
+              type: 'UserDto',
+              bodyType: { name: 'UserDto', absolutePath: DTO_PATH, isArray: false, isInterface: false },
+            }),
+          ],
+          returnType: 'Promise<UserDto>',
+          responseType: { name: 'UserDto', absolutePath: DTO_PATH, isArray: false, isInterface: false },
+          isAsync: true,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     const importMatches = (output.match(/import \{ UserDto \}/g) ?? []).length;
@@ -589,11 +813,21 @@ describe('renderDocsFile() — @ApiBody', () => {
 describe('renderDocsFile() — @ApiBearerAuth', () => {
   it('emits ApiBearerAuth() in method block when requiresAuth=true', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'getProfile', httpDecorator: 'Get', httpPath: 'profile',
-        params: [], returnType: 'string', responseType: null,
-        isAsync: false, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: true,
-      }],
+      methods: [
+        {
+          name: 'getProfile',
+          httpDecorator: 'Get',
+          httpPath: 'profile',
+          params: [],
+          returnType: 'string',
+          responseType: null,
+          isAsync: false,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: true,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).toContain('ApiBearerAuth()');
@@ -601,11 +835,21 @@ describe('renderDocsFile() — @ApiBearerAuth', () => {
 
   it('adds ApiBearerAuth to swagger import when any method requiresAuth', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'getProfile', httpDecorator: 'Get', httpPath: 'profile',
-        params: [], returnType: 'string', responseType: null,
-        isAsync: false, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: true,
-      }],
+      methods: [
+        {
+          name: 'getProfile',
+          httpDecorator: 'Get',
+          httpPath: 'profile',
+          params: [],
+          returnType: 'string',
+          responseType: null,
+          isAsync: false,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: true,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).toMatch(/import \{[^}]*ApiBearerAuth[^}]*\} from '@nestjs\/swagger'/);
@@ -614,10 +858,7 @@ describe('renderDocsFile() — @ApiBearerAuth', () => {
   it('emits ApiBearerAuth() in classDecorators when controllerRequiresAuth=true', () => {
     const ctrl = makeCtrl({ controllerRequiresAuth: true });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
-    const classBlock = output.substring(
-      output.indexOf('classDecorators'),
-      output.indexOf('methods:'),
-    );
+    const classBlock = output.substring(output.indexOf('classDecorators'), output.indexOf('methods:'));
     expect(classBlock).toContain('ApiBearerAuth()');
   });
 
@@ -631,14 +872,30 @@ describe('renderDocsFile() — @ApiBearerAuth', () => {
     const ctrl = makeCtrl({
       methods: [
         {
-          name: 'public', httpDecorator: 'Get', httpPath: 'pub',
-          params: [], returnType: 'string', responseType: null,
-          isAsync: false, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
+          name: 'public',
+          httpDecorator: 'Get',
+          httpPath: 'pub',
+          params: [],
+          returnType: 'string',
+          responseType: null,
+          isAsync: false,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
         },
         {
-          name: 'private', httpDecorator: 'Get', httpPath: 'priv',
-          params: [], returnType: 'string', responseType: null,
-          isAsync: false, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: true,
+          name: 'private',
+          httpDecorator: 'Get',
+          httpPath: 'priv',
+          params: [],
+          returnType: 'string',
+          responseType: null,
+          isAsync: false,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: true,
         },
       ],
     });
@@ -651,12 +908,21 @@ describe('renderDocsFile() — @ApiBearerAuth', () => {
 describe('renderDocsFile() — error responses', () => {
   it('emits 400 response when method has a @Body param', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'create', httpDecorator: 'Post', httpPath: '',
-        params: [{ name: 'dto', type: 'CreateDto', nestDecorator: '@Body', nestDecoratorArg: null, bodyType: null }],
-        returnType: 'void', responseType: null,
-        isAsync: false, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'create',
+          httpDecorator: 'Post',
+          httpPath: '',
+          params: [{ name: 'dto', type: 'CreateDto', nestDecorator: '@Body', nestDecoratorArg: null, bodyType: null }],
+          returnType: 'void',
+          responseType: null,
+          isAsync: false,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).toContain("ApiResponse({ status: 400, description: 'Bad Request' })");
@@ -664,24 +930,43 @@ describe('renderDocsFile() — error responses', () => {
 
   it('does NOT emit 400 when @Body has a field selector', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'create', httpDecorator: 'Post', httpPath: '',
-        params: [{ name: 'name', type: 'string', nestDecorator: '@Body', nestDecoratorArg: 'name', bodyType: null }],
-        returnType: 'void', responseType: null,
-        isAsync: false, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'create',
+          httpDecorator: 'Post',
+          httpPath: '',
+          params: [{ name: 'name', type: 'string', nestDecorator: '@Body', nestDecoratorArg: 'name', bodyType: null }],
+          returnType: 'void',
+          responseType: null,
+          isAsync: false,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
-    expect(output).not.toContain("status: 400");
+    expect(output).not.toContain('status: 400');
   });
 
   it('emits 401 response when requiresAuth=true', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'getProfile', httpDecorator: 'Get', httpPath: 'profile',
-        params: [], returnType: 'string', responseType: null,
-        isAsync: false, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: true,
-      }],
+      methods: [
+        {
+          name: 'getProfile',
+          httpDecorator: 'Get',
+          httpPath: 'profile',
+          params: [],
+          returnType: 'string',
+          responseType: null,
+          isAsync: false,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: true,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).toContain("ApiResponse({ status: 401, description: 'Unauthorized' })");
@@ -689,37 +974,66 @@ describe('renderDocsFile() — error responses', () => {
 
   it('does NOT emit 401 when requiresAuth=false', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'list', httpDecorator: 'Get', httpPath: '',
-        params: [], returnType: 'string', responseType: null,
-        isAsync: false, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'list',
+          httpDecorator: 'Get',
+          httpPath: '',
+          params: [],
+          returnType: 'string',
+          responseType: null,
+          isAsync: false,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
-    expect(output).not.toContain("status: 401");
+    expect(output).not.toContain('status: 401');
   });
 
   it('emits both 400 and 401 when method has body and requires auth', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'create', httpDecorator: 'Post', httpPath: '',
-        params: [{ name: 'dto', type: 'CreateDto', nestDecorator: '@Body', nestDecoratorArg: null, bodyType: null }],
-        returnType: 'void', responseType: null,
-        isAsync: false, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: true,
-      }],
+      methods: [
+        {
+          name: 'create',
+          httpDecorator: 'Post',
+          httpPath: '',
+          params: [{ name: 'dto', type: 'CreateDto', nestDecorator: '@Body', nestDecoratorArg: null, bodyType: null }],
+          returnType: 'void',
+          responseType: null,
+          isAsync: false,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: true,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
-    expect(output).toContain("status: 400");
-    expect(output).toContain("status: 401");
+    expect(output).toContain('status: 400');
+    expect(output).toContain('status: 401');
   });
 
   it('includes description on success response', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'create', httpDecorator: 'Post', httpPath: '',
-        params: [], returnType: 'void', responseType: null,
-        isAsync: false, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'create',
+          httpDecorator: 'Post',
+          httpPath: '',
+          params: [],
+          returnType: 'void',
+          responseType: null,
+          isAsync: false,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).toContain("description: 'Created'");
@@ -748,30 +1062,48 @@ function makeInterfaceResponseType(overrides: Partial<{ isArray: boolean; schema
 describe('renderDocsFile() — interface DTO → schema:', () => {
   it('emits schema: object instead of type: for interface response', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'register', httpDecorator: 'Post', httpPath: '',
-        params: [], returnType: 'Promise<RegisterResponseDto>',
-        responseType: makeInterfaceResponseType(),
-        isAsync: true, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'register',
+          httpDecorator: 'Post',
+          httpPath: '',
+          params: [],
+          returnType: 'Promise<RegisterResponseDto>',
+          responseType: makeInterfaceResponseType(),
+          isAsync: true,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
-    expect(output).toContain("schema:");
+    expect(output).toContain('schema:');
     expect(output).toContain("type: 'object'");
     expect(output).toContain("type: 'boolean'");
     expect(output).toContain("type: 'string'");
-    expect(output).toContain("nullable: true");
+    expect(output).toContain('nullable: true');
     expect(output).toContain("required: ['success']");
   });
 
   it('does NOT emit type: RegisterResponseDto (no runtime value reference)', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'register', httpDecorator: 'Post', httpPath: '',
-        params: [], returnType: 'Promise<RegisterResponseDto>',
-        responseType: makeInterfaceResponseType(),
-        isAsync: true, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'register',
+          httpDecorator: 'Post',
+          httpPath: '',
+          params: [],
+          returnType: 'Promise<RegisterResponseDto>',
+          responseType: makeInterfaceResponseType(),
+          isAsync: true,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).not.toContain('type: RegisterResponseDto');
@@ -779,43 +1111,74 @@ describe('renderDocsFile() — interface DTO → schema:', () => {
 
   it('does NOT import the interface (no runtime value to import)', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'register', httpDecorator: 'Post', httpPath: '',
-        params: [], returnType: 'Promise<RegisterResponseDto>',
-        responseType: makeInterfaceResponseType(),
-        isAsync: true, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'register',
+          httpDecorator: 'Post',
+          httpPath: '',
+          params: [],
+          returnType: 'Promise<RegisterResponseDto>',
+          responseType: makeInterfaceResponseType(),
+          isAsync: true,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
-    expect(output).not.toContain("import { RegisterResponseDto }");
+    expect(output).not.toContain('import { RegisterResponseDto }');
   });
 
   it('wraps schema in type:array + items when isArray=true', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'list', httpDecorator: 'Get', httpPath: '',
-        params: [], returnType: 'Promise<RegisterResponseDto[]>',
-        responseType: makeInterfaceResponseType({ isArray: true }),
-        isAsync: true, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'list',
+          httpDecorator: 'Get',
+          httpPath: '',
+          params: [],
+          returnType: 'Promise<RegisterResponseDto[]>',
+          responseType: makeInterfaceResponseType({ isArray: true }),
+          isAsync: true,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).toContain("type: 'array'");
-    expect(output).toContain("items:");
+    expect(output).toContain('items:');
   });
 
   it('emits schema: for interface @Body params', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'register', httpDecorator: 'Post', httpPath: '',
-        params: [{
-          name: 'body', type: 'RegisterResponseDto',
-          nestDecorator: '@Body', nestDecoratorArg: null,
-          bodyType: makeInterfaceResponseType(),
-        }],
-        returnType: 'void', responseType: null,
-        isAsync: false, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'register',
+          httpDecorator: 'Post',
+          httpPath: '',
+          params: [
+            {
+              name: 'body',
+              type: 'RegisterResponseDto',
+              nestDecorator: '@Body',
+              nestDecoratorArg: null,
+              bodyType: makeInterfaceResponseType(),
+            },
+          ],
+          returnType: 'void',
+          responseType: null,
+          isAsync: false,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).toContain('ApiBody({ schema:');
@@ -824,35 +1187,55 @@ describe('renderDocsFile() — interface DTO → schema:', () => {
 
   it('handles interface with no properties gracefully', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'register', httpDecorator: 'Post', httpPath: '',
-        params: [], returnType: 'Promise<EmptyDto>',
-        responseType: {
-          name: 'EmptyDto', absolutePath: DTO_PATH_IFACE,
-          isArray: false, isInterface: true,
-          inlineSchema: { properties: {}, required: [] },
+      methods: [
+        {
+          name: 'register',
+          httpDecorator: 'Post',
+          httpPath: '',
+          params: [],
+          returnType: 'Promise<EmptyDto>',
+          responseType: {
+            name: 'EmptyDto',
+            absolutePath: DTO_PATH_IFACE,
+            isArray: false,
+            isInterface: true,
+            inlineSchema: { properties: {}, required: [] },
+          },
+          isAsync: true,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
         },
-        isAsync: true, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
-    expect(output).toContain("schema:");
+    expect(output).toContain('schema:');
     expect(output).not.toContain('type: EmptyDto');
   });
 
   it('renders a oneOf property (heterogeneous union) instead of dropping it', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'register', httpDecorator: 'Post', httpPath: '',
-        params: [], returnType: 'Promise<RegisterResponseDto>',
-        responseType: makeInterfaceResponseType({
-          schema: {
-            properties: { weird: { oneOf: [{ type: 'string' }, { type: 'number' }] } },
-            required: ['weird'],
-          },
-        }),
-        isAsync: true, httpStatusCode: null, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'register',
+          httpDecorator: 'Post',
+          httpPath: '',
+          params: [],
+          returnType: 'Promise<RegisterResponseDto>',
+          responseType: makeInterfaceResponseType({
+            schema: {
+              properties: { weird: { oneOf: [{ type: 'string' }, { type: 'number' }] } },
+              required: ['weird'],
+            },
+          }),
+          isAsync: true,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).toContain('oneOf: [');
@@ -864,12 +1247,21 @@ describe('renderDocsFile() — interface DTO → schema:', () => {
 describe('renderDocsFile() — @HttpCode()', () => {
   it('uses @HttpCode status instead of default for POST', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'accept', httpDecorator: 'Post', httpPath: '',
-        httpStatusCode: 202,
-        params: [], returnType: 'void', responseType: null,
-        isAsync: false, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'accept',
+          httpDecorator: 'Post',
+          httpPath: '',
+          httpStatusCode: 202,
+          params: [],
+          returnType: 'void',
+          responseType: null,
+          isAsync: false,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).toContain('status: 202');
@@ -878,12 +1270,21 @@ describe('renderDocsFile() — @HttpCode()', () => {
 
   it('uses @HttpCode 204 for a GET method that explicitly sets it', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'ping', httpDecorator: 'Get', httpPath: 'ping',
-        httpStatusCode: 204,
-        params: [], returnType: 'void', responseType: null,
-        isAsync: false, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'ping',
+          httpDecorator: 'Get',
+          httpPath: 'ping',
+          httpStatusCode: 204,
+          params: [],
+          returnType: 'void',
+          responseType: null,
+          isAsync: false,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).toContain('status: 204');
@@ -892,12 +1293,21 @@ describe('renderDocsFile() — @HttpCode()', () => {
 
   it('falls back to default status when httpStatusCode is null', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'create', httpDecorator: 'Post', httpPath: '',
-        httpStatusCode: null,
-        params: [], returnType: 'void', responseType: null,
-        isAsync: false, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'create',
+          httpDecorator: 'Post',
+          httpPath: '',
+          httpStatusCode: null,
+          params: [],
+          returnType: 'void',
+          responseType: null,
+          isAsync: false,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).toContain('status: 201');
@@ -907,7 +1317,10 @@ describe('renderDocsFile() — @HttpCode()', () => {
 describe('renderDocsFile() — class-validator DTO → schema:', () => {
   const CV_DTO_PATH = '/project/src/users/create-user.dto.ts';
 
-  function makeClassResponseType(overrides: { isArray?: boolean; classSchema: import('../../cli/extract-methods').InlineSchema }) {
+  function makeClassResponseType(overrides: {
+    isArray?: boolean;
+    classSchema: import('../../cli/extract-methods').InlineSchema;
+  }) {
     return {
       name: 'CreateUserDto',
       absolutePath: CV_DTO_PATH,
@@ -919,124 +1332,181 @@ describe('renderDocsFile() — class-validator DTO → schema:', () => {
 
   it('emits schema: with class-validator properties for @Body', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'create', httpDecorator: 'Post', httpPath: '',
-        httpStatusCode: null,
-        params: [{
-          name: 'dto', type: 'CreateUserDto',
-          nestDecorator: '@Body', nestDecoratorArg: null,
-          bodyType: makeClassResponseType({
-            classSchema: {
-              properties: {
-                email: { type: 'string', format: 'email' },
-                age: { type: 'integer', minimum: 1, maximum: 120 },
-                name: { type: 'string', maxLength: 100 },
-              },
-              required: ['email', 'age'],
+      methods: [
+        {
+          name: 'create',
+          httpDecorator: 'Post',
+          httpPath: '',
+          httpStatusCode: null,
+          params: [
+            {
+              name: 'dto',
+              type: 'CreateUserDto',
+              nestDecorator: '@Body',
+              nestDecoratorArg: null,
+              bodyType: makeClassResponseType({
+                classSchema: {
+                  properties: {
+                    email: { type: 'string', format: 'email' },
+                    age: { type: 'integer', minimum: 1, maximum: 120 },
+                    name: { type: 'string', maxLength: 100 },
+                  },
+                  required: ['email', 'age'],
+                },
+              }),
             },
-          }),
-        }],
-        returnType: 'void', responseType: null,
-        isAsync: false, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+          ],
+          returnType: 'void',
+          responseType: null,
+          isAsync: false,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
-    expect(output).toContain("ApiBody({ schema:");
+    expect(output).toContain('ApiBody({ schema:');
     expect(output).toContain("format: 'email'");
-    expect(output).toContain("minimum: 1");
-    expect(output).toContain("maximum: 120");
-    expect(output).toContain("maxLength: 100");
+    expect(output).toContain('minimum: 1');
+    expect(output).toContain('maximum: 120');
+    expect(output).toContain('maxLength: 100');
     expect(output).toContain("required: ['email', 'age']");
   });
 
   it('does NOT import the class when classSchema is set (no type: reference)', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'create', httpDecorator: 'Post', httpPath: '',
-        httpStatusCode: null,
-        params: [{
-          name: 'dto', type: 'CreateUserDto',
-          nestDecorator: '@Body', nestDecoratorArg: null,
-          bodyType: makeClassResponseType({
-            classSchema: { properties: { email: { type: 'string' } }, required: ['email'] },
-          }),
-        }],
-        returnType: 'void', responseType: null,
-        isAsync: false, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'create',
+          httpDecorator: 'Post',
+          httpPath: '',
+          httpStatusCode: null,
+          params: [
+            {
+              name: 'dto',
+              type: 'CreateUserDto',
+              nestDecorator: '@Body',
+              nestDecoratorArg: null,
+              bodyType: makeClassResponseType({
+                classSchema: { properties: { email: { type: 'string' } }, required: ['email'] },
+              }),
+            },
+          ],
+          returnType: 'void',
+          responseType: null,
+          isAsync: false,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
-    expect(output).not.toContain("import { CreateUserDto }");
-    expect(output).not.toContain("type: CreateUserDto");
+    expect(output).not.toContain('import { CreateUserDto }');
+    expect(output).not.toContain('type: CreateUserDto');
   });
 
   it('emits schema: for response type with classSchema', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'findOne', httpDecorator: 'Get', httpPath: ':id',
-        httpStatusCode: null,
-        params: [],
-        returnType: 'Promise<CreateUserDto>',
-        responseType: makeClassResponseType({
-          classSchema: {
-            properties: {
-              id: { type: 'string', format: 'uuid' },
-              name: { type: 'string' },
+      methods: [
+        {
+          name: 'findOne',
+          httpDecorator: 'Get',
+          httpPath: ':id',
+          httpStatusCode: null,
+          params: [],
+          returnType: 'Promise<CreateUserDto>',
+          responseType: makeClassResponseType({
+            classSchema: {
+              properties: {
+                id: { type: 'string', format: 'uuid' },
+                name: { type: 'string' },
+              },
+              required: ['id', 'name'],
             },
-            required: ['id', 'name'],
-          },
-        }),
-        isAsync: true, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+          }),
+          isAsync: true,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
-    expect(output).toContain("schema:");
+    expect(output).toContain('schema:');
     expect(output).toContain("format: 'uuid'");
   });
 
   it('falls back to type: ClassName when classSchema is absent', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'create', httpDecorator: 'Post', httpPath: '',
-        httpStatusCode: null,
-        params: [{
-          name: 'dto', type: 'CreateUserDto',
-          nestDecorator: '@Body', nestDecoratorArg: null,
-          bodyType: {
-            name: 'CreateUserDto', absolutePath: CV_DTO_PATH,
-            isArray: false, isInterface: false,
-            // no classSchema
-          },
-        }],
-        returnType: 'void', responseType: null,
-        isAsync: false, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+      methods: [
+        {
+          name: 'create',
+          httpDecorator: 'Post',
+          httpPath: '',
+          httpStatusCode: null,
+          params: [
+            {
+              name: 'dto',
+              type: 'CreateUserDto',
+              nestDecorator: '@Body',
+              nestDecoratorArg: null,
+              bodyType: {
+                name: 'CreateUserDto',
+                absolutePath: CV_DTO_PATH,
+                isArray: false,
+                isInterface: false,
+                // no classSchema
+              },
+            },
+          ],
+          returnType: 'void',
+          responseType: null,
+          isAsync: false,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
-    expect(output).toContain("type: CreateUserDto");
-    expect(output).not.toContain("schema:");
+    expect(output).toContain('type: CreateUserDto');
+    expect(output).not.toContain('schema:');
   });
 
   it('emits nullable: true for nullable properties', () => {
     const ctrl = makeCtrl({
-      methods: [{
-        name: 'create', httpDecorator: 'Post', httpPath: '',
-        httpStatusCode: null,
-        params: [{
-          name: 'dto', type: 'CreateUserDto',
-          nestDecorator: '@Body', nestDecoratorArg: null,
-          bodyType: makeClassResponseType({
-            classSchema: {
-              properties: {
-                bio: { type: 'string', nullable: true },
-              },
-              required: [],
+      methods: [
+        {
+          name: 'create',
+          httpDecorator: 'Post',
+          httpPath: '',
+          httpStatusCode: null,
+          params: [
+            {
+              name: 'dto',
+              type: 'CreateUserDto',
+              nestDecorator: '@Body',
+              nestDecoratorArg: null,
+              bodyType: makeClassResponseType({
+                classSchema: {
+                  properties: {
+                    bio: { type: 'string', nullable: true },
+                  },
+                  required: [],
+                },
+              }),
             },
-          }),
-        }],
-        returnType: 'void', responseType: null,
-        isAsync: false, isInherited: false, inheritedFrom: null, requiresAuth: false,
-      }],
+          ],
+          returnType: 'void',
+          responseType: null,
+          isAsync: false,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
     });
     const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
     expect(output).toContain('nullable: true');

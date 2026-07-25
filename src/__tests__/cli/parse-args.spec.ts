@@ -1,19 +1,12 @@
 import path from 'path';
-import {
-  parseAndValidateOptions,
-  assertWithinRoot,
-  validateGlob,
-  resolveAndValidate,
-} from '../../cli/parse-args';
+import { parseAndValidateOptions, assertWithinRoot, validateGlob, resolveAndValidate } from '../../cli/parse-args';
 import { PathTraversalError } from '../../cli/errors';
 
 const ROOT = '/project/root';
 
 describe('assertWithinRoot()', () => {
   it('accepts a path that is inside the root', () => {
-    expect(() =>
-      assertWithinRoot('/project/root/src/foo.ts', ROOT),
-    ).not.toThrow();
+    expect(() => assertWithinRoot('/project/root/src/foo.ts', ROOT)).not.toThrow();
   });
 
   it('accepts the root itself', () => {
@@ -21,21 +14,15 @@ describe('assertWithinRoot()', () => {
   });
 
   it('rejects a path that escapes via ../..', () => {
-    expect(() =>
-      assertWithinRoot('/project/etc/passwd', ROOT),
-    ).toThrow(PathTraversalError);
+    expect(() => assertWithinRoot('/project/etc/passwd', ROOT)).toThrow(PathTraversalError);
   });
 
   it('rejects a path that looks inside but resolves outside', () => {
-    expect(() =>
-      assertWithinRoot('/project/root/../../../etc/passwd', ROOT),
-    ).toThrow(PathTraversalError);
+    expect(() => assertWithinRoot('/project/root/../../../etc/passwd', ROOT)).toThrow(PathTraversalError);
   });
 
   it('rejects a sibling directory', () => {
-    expect(() =>
-      assertWithinRoot('/project/other', ROOT),
-    ).toThrow(PathTraversalError);
+    expect(() => assertWithinRoot('/project/other', ROOT)).toThrow(PathTraversalError);
   });
 });
 
@@ -45,9 +32,7 @@ describe('validateGlob()', () => {
   });
 
   it('accepts a nested path glob', () => {
-    expect(validateGlob('src/modules/**/*.controller.ts')).toBe(
-      'src/modules/**/*.controller.ts',
-    );
+    expect(validateGlob('src/modules/**/*.controller.ts')).toBe('src/modules/**/*.controller.ts');
   });
 
   it('rejects a pattern starting with ..', () => {
@@ -74,9 +59,7 @@ describe('resolveAndValidate()', () => {
   });
 
   it('rejects a path escaping root', () => {
-    expect(() =>
-      resolveAndValidate('../../etc/passwd', ROOT, '--tsconfig'),
-    ).toThrow(PathTraversalError);
+    expect(() => resolveAndValidate('../../etc/passwd', ROOT, '--tsconfig')).toThrow(PathTraversalError);
   });
 });
 
@@ -103,9 +86,7 @@ describe('parseAndValidateOptions()', () => {
   });
 
   it('rejects a malicious glob in --pattern', () => {
-    expect(() =>
-      parseAndValidateOptions({ pattern: '**; rm -rf /' }),
-    ).toThrow(/Invalid --pattern/);
+    expect(() => parseAndValidateOptions({ pattern: '**; rm -rf /' })).toThrow(/Invalid --pattern/);
   });
 
   it('resolves root to an absolute path', () => {

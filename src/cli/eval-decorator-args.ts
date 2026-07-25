@@ -13,13 +13,7 @@ export interface Unresolved {
 }
 
 export type EvaluatedValue =
-  | string
-  | number
-  | boolean
-  | null
-  | EvaluatedValue[]
-  | { [key: string]: EvaluatedValue }
-  | Unresolved;
+  string | number | boolean | null | EvaluatedValue[] | { [key: string]: EvaluatedValue } | Unresolved;
 
 export function isUnresolved(value: EvaluatedValue): value is Unresolved {
   return typeof value === 'object' && value !== null && !Array.isArray(value) && '__unresolved' in value;
@@ -27,14 +21,32 @@ export function isUnresolved(value: EvaluatedValue): value is Unresolved {
 
 /** Common `HttpStatus.X` members from @nestjs/common, for ApiResponse({ status: HttpStatus.CREATED }). */
 const HTTP_STATUS_MEMBERS: Record<string, number> = {
-  CONTINUE: 100, OK: 200, CREATED: 201, ACCEPTED: 202, NO_CONTENT: 204,
-  MOVED_PERMANENTLY: 301, FOUND: 302, NOT_MODIFIED: 304,
-  BAD_REQUEST: 400, UNAUTHORIZED: 401, FORBIDDEN: 403, NOT_FOUND: 404,
-  METHOD_NOT_ALLOWED: 405, NOT_ACCEPTABLE: 406, REQUEST_TIMEOUT: 408,
-  CONFLICT: 409, GONE: 410, PAYLOAD_TOO_LARGE: 413, UNSUPPORTED_MEDIA_TYPE: 415,
-  UNPROCESSABLE_ENTITY: 422, TOO_MANY_REQUESTS: 429,
-  INTERNAL_SERVER_ERROR: 500, NOT_IMPLEMENTED: 501, BAD_GATEWAY: 502,
-  SERVICE_UNAVAILABLE: 503, GATEWAY_TIMEOUT: 504,
+  CONTINUE: 100,
+  OK: 200,
+  CREATED: 201,
+  ACCEPTED: 202,
+  NO_CONTENT: 204,
+  MOVED_PERMANENTLY: 301,
+  FOUND: 302,
+  NOT_MODIFIED: 304,
+  BAD_REQUEST: 400,
+  UNAUTHORIZED: 401,
+  FORBIDDEN: 403,
+  NOT_FOUND: 404,
+  METHOD_NOT_ALLOWED: 405,
+  NOT_ACCEPTABLE: 406,
+  REQUEST_TIMEOUT: 408,
+  CONFLICT: 409,
+  GONE: 410,
+  PAYLOAD_TOO_LARGE: 413,
+  UNSUPPORTED_MEDIA_TYPE: 415,
+  UNPROCESSABLE_ENTITY: 422,
+  TOO_MANY_REQUESTS: 429,
+  INTERNAL_SERVER_ERROR: 500,
+  NOT_IMPLEMENTED: 501,
+  BAD_GATEWAY: 502,
+  SERVICE_UNAVAILABLE: 503,
+  GATEWAY_TIMEOUT: 504,
 };
 
 function unresolved(node: Node): Unresolved {

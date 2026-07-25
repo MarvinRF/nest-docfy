@@ -41,9 +41,11 @@ describe('evaluateExpression()', () => {
   });
 
   it('evaluates nested objects and arrays', () => {
-    expect(
-      evaluateExpression(parseExpression(`{ status: 201, tags: ['a', 'b'], nested: { x: 1 } }`)),
-    ).toEqual({ status: 201, tags: ['a', 'b'], nested: { x: 1 } });
+    expect(evaluateExpression(parseExpression(`{ status: 201, tags: ['a', 'b'], nested: { x: 1 } }`))).toEqual({
+      status: 201,
+      tags: ['a', 'b'],
+      nested: { x: 1 },
+    });
   });
 
   it('resolves HttpStatus.X member access to its numeric value', () => {
@@ -53,10 +55,7 @@ describe('evaluateExpression()', () => {
 
   it('resolves a string enum identifier to its member values', () => {
     const project = new Project({ useInMemoryFileSystem: true, skipFileDependencyResolution: true });
-    const sf = project.createSourceFile(
-      'x.ts',
-      `enum Role { Admin = 'admin', User = 'user' } const __x = Role;`,
-    );
+    const sf = project.createSourceFile('x.ts', `enum Role { Admin = 'admin', User = 'user' } const __x = Role;`);
     const decl = sf.getVariableDeclarationOrThrow('__x');
     expect(evaluateExpression(decl.getInitializerOrThrow())).toEqual(['admin', 'user']);
   });

@@ -16,15 +16,11 @@ function makeApp(overrides: Partial<ProjectApp> = {}): ProjectApp {
 
 describe('deriveDocsFilePath()', () => {
   it('replaces .ts extension with .docs.ts', () => {
-    expect(deriveDocsFilePath('/src/users.controller.ts', 'ts')).toBe(
-      '/src/users.controller.docs.ts',
-    );
+    expect(deriveDocsFilePath('/src/users.controller.ts', 'ts')).toBe('/src/users.controller.docs.ts');
   });
 
   it('produces .docs.js for js format', () => {
-    expect(deriveDocsFilePath('/src/users.controller.ts', 'js')).toBe(
-      '/src/users.controller.docs.js',
-    );
+    expect(deriveDocsFilePath('/src/users.controller.ts', 'js')).toBe('/src/users.controller.docs.js');
   });
 });
 

@@ -48,9 +48,7 @@ describe('detectProject() — NX monorepo', () => {
   it('falls back to tsconfig.build.json when no build target tsConfig', () => {
     const ctx = detectProject(fix('nx'));
     const worker = ctx.apps.find((a) => a.name === 'worker')!;
-    expect(worker.tsconfig).toBe(
-      path.join(fix('nx'), 'apps/worker/tsconfig.build.json'),
-    );
+    expect(worker.tsconfig).toBe(path.join(fix('nx'), 'apps/worker/tsconfig.build.json'));
   });
 
   it('all app roots are inside the project root', () => {
@@ -77,17 +75,13 @@ describe('detectProject() — Nest CLI monorepo', () => {
   it('uses tsConfigPath from compilerOptions when available', () => {
     const ctx = detectProject(fix('nest-cli'));
     const api = ctx.apps.find((a) => a.name === 'api')!;
-    expect(api.tsconfig).toBe(
-      path.join(fix('nest-cli'), 'apps/api/tsconfig.app.json'),
-    );
+    expect(api.tsconfig).toBe(path.join(fix('nest-cli'), 'apps/api/tsconfig.app.json'));
   });
 
   it('falls back to tsconfig.build.json when no compilerOptions.tsConfigPath', () => {
     const ctx = detectProject(fix('nest-cli'));
     const admin = ctx.apps.find((a) => a.name === 'admin')!;
-    expect(admin.tsconfig).toBe(
-      path.join(fix('nest-cli'), 'apps/admin/tsconfig.build.json'),
-    );
+    expect(admin.tsconfig).toBe(path.join(fix('nest-cli'), 'apps/admin/tsconfig.build.json'));
   });
 });
 

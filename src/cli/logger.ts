@@ -10,12 +10,18 @@ export function setQuiet(value: boolean): void {
 
 function prefix(level: LogLevel): string {
   switch (level) {
-    case 'success': return pc.green('✔');
-    case 'warn':    return pc.yellow('⚠');
-    case 'error':   return pc.red('✖');
-    case 'skip':    return pc.gray('–');
-    case 'dry':     return pc.cyan('~');
-    case 'info':    return pc.blue('ℹ');
+    case 'success':
+      return pc.green('✔');
+    case 'warn':
+      return pc.yellow('⚠');
+    case 'error':
+      return pc.red('✖');
+    case 'skip':
+      return pc.gray('–');
+    case 'dry':
+      return pc.cyan('~');
+    case 'info':
+      return pc.blue('ℹ');
   }
 }
 
@@ -33,8 +39,8 @@ export function header(message: string): void {
 export function summary(created: number, skipped: number, errors: number): void {
   if (quiet) return;
   const parts: string[] = [];
-  if (created > 0)  parts.push(pc.green(`${created} created`));
-  if (skipped > 0)  parts.push(pc.gray(`${skipped} skipped`));
-  if (errors > 0)   parts.push(pc.red(`${errors} error${errors > 1 ? 's' : ''}`));
+  if (created > 0) parts.push(pc.green(`${created} created`));
+  if (skipped > 0) parts.push(pc.gray(`${skipped} skipped`));
+  if (errors > 0) parts.push(pc.red(`${errors} error${errors > 1 ? 's' : ''}`));
   process.stdout.write(`\n${pc.bold('Done.')} ${parts.join(' · ')}\n\n`);
 }

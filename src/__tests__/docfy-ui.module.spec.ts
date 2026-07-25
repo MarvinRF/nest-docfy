@@ -11,15 +11,11 @@ function makeRecordingApp(type: 'express' | 'fastify' = 'express') {
   const scopedRegistrations: ScopedRegistration[] = [];
 
   const fakeInstance = {
-    register: (
-      plugin: (scoped: unknown, opts: unknown, done: () => void) => void,
-      opts: { prefix: string },
-    ) => {
+    register: (plugin: (scoped: unknown, opts: unknown, done: () => void) => void, opts: { prefix: string }) => {
       const scopedCalls: ScopedCall[] = [];
       const scoped = {
         register: (...a: unknown[]) => scopedCalls.push({ method: 'register', args: a }),
-        setNotFoundHandler: (...a: unknown[]) =>
-          scopedCalls.push({ method: 'setNotFoundHandler', args: a }),
+        setNotFoundHandler: (...a: unknown[]) => scopedCalls.push({ method: 'setNotFoundHandler', args: a }),
       };
       plugin(scoped, opts, () => {});
       scopedRegistrations.push({ opts, scopedCalls });
@@ -142,9 +138,7 @@ describe('DocfyUiModule.setup() — Express', () => {
 
   it('throws if staticSpecPath does not point to an existing file', () => {
     const { app } = makeRecordingApp();
-    expect(() =>
-      DocfyUiModule.setup('/docs', app, { staticSpecPath: '/nonexistent/openapi.json' }),
-    ).toThrow();
+    expect(() => DocfyUiModule.setup('/docs', app, { staticSpecPath: '/nonexistent/openapi.json' })).toThrow();
   });
 });
 
@@ -175,14 +169,9 @@ describe('DocfyUiModule.setup() — Fastify', () => {
     const { app, scopedRegistrations } = makeRecordingApp('fastify');
     DocfyUiModule.setup('/docs', app);
 
-    const notFoundCall = scopedRegistrations[0].scopedCalls.find(
-      (c) => c.method === 'setNotFoundHandler',
-    );
+    const notFoundCall = scopedRegistrations[0].scopedCalls.find((c) => c.method === 'setNotFoundHandler');
     expect(notFoundCall).toBeDefined();
-    const handler = notFoundCall!.args[0] as (
-      req: unknown,
-      reply: ReturnType<typeof makeMockResponse>,
-    ) => void;
+    const handler = notFoundCall!.args[0] as (req: unknown, reply: ReturnType<typeof makeMockResponse>) => void;
 
     const reply = makeMockResponse();
     handler(undefined, reply);

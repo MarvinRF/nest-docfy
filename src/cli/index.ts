@@ -36,12 +36,15 @@ function runPipeline(options: CliOptions, silent = false): number {
 
   if (!silent) {
     const kindLabel: Record<typeof context.kind, string> = {
-      'simple':            'Simple project',
-      'nx':                'NX Monorepo',
+      simple: 'Simple project',
+      nx: 'NX Monorepo',
       'nest-cli-monorepo': 'Nest CLI Monorepo',
-      'generic-monorepo':  'Generic Monorepo',
+      'generic-monorepo': 'Generic Monorepo',
     };
-    log('success', `Project type: ${kindLabel[context.kind]} (${context.apps.length} app${context.apps.length !== 1 ? 's' : ''})`);
+    log(
+      'success',
+      `Project type: ${kindLabel[context.kind]} (${context.apps.length} app${context.apps.length !== 1 ? 's' : ''})`,
+    );
   }
 
   const scanResult = scanAllApps(
@@ -68,7 +71,9 @@ function runPipeline(options: CliOptions, silent = false): number {
     format: options.format,
   });
 
-  let created = 0, skipped = 0, errors = scanResult.errors.length;
+  let created = 0,
+    skipped = 0,
+    errors = scanResult.errors.length;
 
   for (const r of writeResults) {
     switch (r.outcome) {
@@ -77,7 +82,10 @@ function runPipeline(options: CliOptions, silent = false): number {
         created++;
         break;
       case 'merged':
-        log('success', `${r.controllerClass} → ${r.docsFilePath}  ${pc.cyan('[merged]')}${r.addedMethods?.length ? ` (+${r.addedMethods.join(', ')})` : ''}`);
+        log(
+          'success',
+          `${r.controllerClass} → ${r.docsFilePath}  ${pc.cyan('[merged]')}${r.addedMethods?.length ? ` (+${r.addedMethods.join(', ')})` : ''}`,
+        );
         created++;
         break;
       case 'skipped':
@@ -131,9 +139,9 @@ program
       log('info', `Pattern: ${options.pattern}`);
       log('info', `Format: ${options.format}`);
       if (options.tsconfig) log('info', `Tsconfig: ${options.tsconfig}`);
-      if (options.force)    log('warn', 'Force mode — new methods merged, existing decorators preserved.');
-      if (options.dryRun)   log('dry',  'Dry-run mode — no files will be written.');
-      if (options.watch)    log('info', 'Watch mode enabled.');
+      if (options.force) log('warn', 'Force mode — new methods merged, existing decorators preserved.');
+      if (options.dryRun) log('dry', 'Dry-run mode — no files will be written.');
+      if (options.watch) log('info', 'Watch mode enabled.');
 
       // Initial run
       const initialErrors = runPipeline(options);
@@ -169,7 +177,6 @@ program
       };
       process.on('SIGINT', shutdown);
       process.on('SIGTERM', shutdown);
-
     } catch (err) {
       if (err instanceof CliError) {
         process.stderr.write(`\n${pc.red('✖ Error:')} ${err.message}\n\n`);
@@ -243,13 +250,12 @@ program
           log('error', `${issue.controllerClass} — no companion docs file found at ${issue.docsFile}`);
         } else {
           log('error', `${issue.controllerClass} — undocumented methods: ${issue.methods!.join(', ')}`);
-          log('info',  `  → run ${pc.cyan('nestjs-docfy generate --force')} to merge new methods`);
+          log('info', `  → run ${pc.cyan('nestjs-docfy generate --force')} to merge new methods`);
         }
       }
 
       process.stderr.write(`\n${pc.red(`✖ ${issues.length} controller(s) out of sync.`)}\n\n`);
       process.exit(CliExitCode.PartialError);
-
     } catch (err) {
       if (err instanceof CliError) {
         process.stderr.write(`\n${pc.red('✖ Error:')} ${err.message}\n\n`);
@@ -292,7 +298,10 @@ program
       if (rawOpts.min !== undefined) {
         min = Number(rawOpts.min);
         if (!Number.isFinite(min) || min < 0 || min > 100) {
-          throw new CliError(`Invalid --min value: ${String(rawOpts.min)} (must be a number between 0 and 100)`, CliExitCode.Fatal);
+          throw new CliError(
+            `Invalid --min value: ${String(rawOpts.min)} (must be a number between 0 and 100)`,
+            CliExitCode.Fatal,
+          );
         }
       }
 
@@ -336,7 +345,6 @@ program
       }
 
       process.exit(CliExitCode.Ok);
-
     } catch (err) {
       if (err instanceof CliError) {
         process.stderr.write(`\n${pc.red('✖ Error:')} ${err.message}\n\n`);
@@ -422,7 +430,6 @@ program
 
       process.stderr.write(`\n${pc.red(`✖ ${issues.length} issue(s) found.`)}\n\n`);
       process.exit(CliExitCode.PartialError);
-
     } catch (err) {
       if (err instanceof CliError) {
         process.stderr.write(`\n${pc.red('✖ Error:')} ${err.message}\n\n`);
@@ -444,9 +451,13 @@ program
 async function readSpecSource(source: string, root: string): Promise<OpenApiDocument> {
   let text: string;
   if (/^https?:\/\//.test(source)) {
-    const fetchFn = (globalThis as any).fetch as undefined | ((url: string) => Promise<{ ok: boolean; status: number; text(): Promise<string> }>);
+    const fetchFn = (globalThis as any).fetch as
+      undefined | ((url: string) => Promise<{ ok: boolean; status: number; text(): Promise<string> }>);
     if (!fetchFn) {
-      throw new CliError('Fetching --spec from a URL requires a Node version with global fetch (Node 18+).', CliExitCode.Fatal);
+      throw new CliError(
+        'Fetching --spec from a URL requires a Node version with global fetch (Node 18+).',
+        CliExitCode.Fatal,
+      );
     }
     const res = await fetchFn(source);
     if (!res.ok) {
@@ -478,11 +489,14 @@ async function readSpecSource(source: string, root: string): Promise<OpenApiDocu
 program
   .command('patch-spec')
   .description(
-    'Patch an already-built OpenAPI document with every controller\'s companion docs file, ' +
+    "Patch an already-built OpenAPI document with every controller's companion docs file, " +
       'using static analysis only — no runtime require(), no decorators applied to any class. ' +
       'Works under any build mode, including NestJS CLI\'s "webpack: true" (see README).',
   )
-  .requiredOption('--spec <path-or-url>', 'Path to a local openapi.json, or a URL (e.g. http://localhost:3000/api-json)')
+  .requiredOption(
+    '--spec <path-or-url>',
+    'Path to a local openapi.json, or a URL (e.g. http://localhost:3000/api-json)',
+  )
   .option('--out <path>', 'Where to write the patched document (default: stdout)')
   .option('--root <path>', 'Project root directory', '.')
   .option('--tsconfig <path>', 'Path to tsconfig.json (auto-detected if omitted)')

@@ -55,9 +55,10 @@ function loadSourceMap(bundleFile: string): RawSourceMap | null {
 
   try {
     const contents = fs.readFileSync(bundleFile, 'utf8');
-    const match = /\/\/[#@]\s*sourceMappingURL=data:application\/json;(?:charset=[^;]+;)?base64,([a-zA-Z0-9+/=]+)\s*$/m.exec(
-      contents,
-    );
+    const match =
+      /\/\/[#@]\s*sourceMappingURL=data:application\/json;(?:charset=[^;]+;)?base64,([a-zA-Z0-9+/=]+)\s*$/m.exec(
+        contents,
+      );
     if (!match) return null;
     const decoded = Buffer.from(match[1], 'base64').toString('utf8');
     return JSON.parse(decoded) as RawSourceMap;

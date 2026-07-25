@@ -61,7 +61,7 @@ function loadFastifyStatic(): unknown {
     return require('@fastify/static');
   } catch {
     throw new Error(
-      "DocfyUiModule.setup(): serving docfy-ui on a Fastify-based Nest app requires " +
+      'DocfyUiModule.setup(): serving docfy-ui on a Fastify-based Nest app requires ' +
         "the optional peer dependency '@fastify/static'. Install it with `npm install @fastify/static`.",
     );
   }
@@ -98,11 +98,7 @@ interface FastifyRootInstance {
  * `BrowserRouter`'s `basename`.
  */
 export class DocfyUiModule {
-  static setup(
-    mountPath: string,
-    app: DocfyUiSetupTarget,
-    options: DocfyUiSetupOptions = {},
-  ): void {
+  static setup(mountPath: string, app: DocfyUiSetupTarget, options: DocfyUiSetupOptions = {}): void {
     const httpAdapter = app.getHttpAdapter();
     const isFastify = httpAdapter.getType() === 'fastify';
 

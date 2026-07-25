@@ -68,7 +68,9 @@ describe('buildOpenApiPatch()', () => {
     const config: ExtractedDocsConfig = {
       classDecorators: [],
       methods: {
-        findAll: [{ name: 'ApiOperation', args: [{ summary: 'List users', description: 'Returns all', deprecated: true }] }],
+        findAll: [
+          { name: 'ApiOperation', args: [{ summary: 'List users', description: 'Returns all', deprecated: true }] },
+        ],
       },
     };
     const patch = buildOpenApiPatch(ctrl, config);
@@ -85,7 +87,10 @@ describe('buildOpenApiPatch()', () => {
       classDecorators: [],
       methods: {
         findAll: [
-          { name: 'ApiResponse', args: [{ status: 200, description: 'OK', schema: { type: 'array', items: { type: 'string' } } }] },
+          {
+            name: 'ApiResponse',
+            args: [{ status: 200, description: 'OK', schema: { type: 'array', items: { type: 'string' } } }],
+          },
         ],
       },
     };
@@ -106,11 +111,13 @@ describe('buildOpenApiPatch()', () => {
         findAll: [
           {
             name: 'ApiResponse',
-            args: [{
-              status: 200,
-              example: { id: 1, name: 'Alice' },
-              examples: { basic: { summary: 'Basic', value: { id: 1 } } },
-            }],
+            args: [
+              {
+                status: 200,
+                example: { id: 1, name: 'Alice' },
+                examples: { basic: { summary: 'Basic', value: { id: 1 } } },
+              },
+            ],
           },
         ],
       },
@@ -129,10 +136,12 @@ describe('buildOpenApiPatch()', () => {
     const config: ExtractedDocsConfig = {
       classDecorators: [],
       methods: {
-        create: [{
-          name: 'ApiBody',
-          args: [{ schema: { type: 'object' }, examples: { basic: { value: { name: 'Alice' } } } }],
-        }],
+        create: [
+          {
+            name: 'ApiBody',
+            args: [{ schema: { type: 'object' }, examples: { basic: { value: { name: 'Alice' } } } }],
+          },
+        ],
       },
     };
     const patch = buildOpenApiPatch(ctrl, config);
@@ -152,10 +161,12 @@ describe('buildOpenApiPatch()', () => {
     const config: ExtractedDocsConfig = {
       classDecorators: [],
       methods: {
-        findAll: [{
-          name: 'ApiResponse',
-          args: [{ status: 200, example: { id: 1, ownerId: { __unresolved: true, text: 'CURRENT_USER_ID' } } }],
-        }],
+        findAll: [
+          {
+            name: 'ApiResponse',
+            args: [{ status: 200, example: { id: 1, ownerId: { __unresolved: true, text: 'CURRENT_USER_ID' } } }],
+          },
+        ],
       },
     };
     const patch = buildOpenApiPatch(ctrl, config);
@@ -167,10 +178,17 @@ describe('buildOpenApiPatch()', () => {
     const config: ExtractedDocsConfig = {
       classDecorators: [],
       methods: {
-        findAll: [{
-          name: 'ApiResponse',
-          args: [{ status: 200, schema: { type: 'object', properties: { id: { __unresolved: true, text: 'SOME_TYPE' } } } }],
-        }],
+        findAll: [
+          {
+            name: 'ApiResponse',
+            args: [
+              {
+                status: 200,
+                schema: { type: 'object', properties: { id: { __unresolved: true, text: 'SOME_TYPE' } } },
+              },
+            ],
+          },
+        ],
       },
     };
     const patch = buildOpenApiPatch(ctrl, config);
@@ -178,7 +196,7 @@ describe('buildOpenApiPatch()', () => {
     expect(patch['/users'].get.responses!['200'].content).toBeUndefined();
   });
 
-  it('falls back to the method\'s resolved return-type schema when ApiResponse({ type }) is an unresolved class reference', () => {
+  it("falls back to the method's resolved return-type schema when ApiResponse({ type }) is an unresolved class reference", () => {
     const ctrl = makeCtrl({
       methods: [
         makeMethod({
@@ -238,7 +256,11 @@ describe('buildOpenApiPatch()', () => {
     const patch = buildOpenApiPatch(ctrl, config);
     expect(patch['/users'].post.requestBody).toEqual({
       required: true,
-      content: { 'application/json': { schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] } } },
+      content: {
+        'application/json': {
+          schema: { type: 'object', properties: { name: { type: 'string' } }, required: ['name'] },
+        },
+      },
     });
   });
 

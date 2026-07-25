@@ -28,7 +28,13 @@ function baseMethod() {
     httpDecorator: 'Get' as string | null,
     httpPath: null as string | null,
     httpStatusCode: null,
-    params: [] as { name: string; type: string; nestDecorator: string | null; nestDecoratorArg: string | null; bodyType: null }[],
+    params: [] as {
+      name: string;
+      type: string;
+      nestDecorator: string | null;
+      nestDecoratorArg: string | null;
+      bodyType: null;
+    }[],
     returnType: 'unknown',
     responseType: null,
     isAsync: false,
@@ -54,7 +60,11 @@ function writeDocs(content: string): void {
 
 describe('parseDocsFileMethods()', () => {
   afterEach(() => {
-    try { fs.unlinkSync(DOCS_PATH); } catch { /* ignore */ }
+    try {
+      fs.unlinkSync(DOCS_PATH);
+    } catch {
+      /* ignore */
+    }
   });
 
   it('returns empty map when file does not exist', () => {
@@ -63,18 +73,20 @@ describe('parseDocsFileMethods()', () => {
   });
 
   it('detects summary presence on ApiOperation', () => {
-    writeDocs([
-      "docs(UsersController, {",
-      "  methods: {",
-      "    findAll: [",
-      "      ApiOperation({ summary: 'Find all' }),",
-      "    ],",
-      "    create: [",
-      "      ApiOperation({}),",
-      "    ],",
-      "  },",
-      "});",
-    ].join('\n'));
+    writeDocs(
+      [
+        'docs(UsersController, {',
+        '  methods: {',
+        '    findAll: [',
+        "      ApiOperation({ summary: 'Find all' }),",
+        '    ],',
+        '    create: [',
+        '      ApiOperation({}),',
+        '    ],',
+        '  },',
+        '});',
+      ].join('\n'),
+    );
 
     const result = parseDocsFileMethods(DOCS_PATH);
     expect(result.get('findAll')?.hasSummary).toBe(true);
@@ -82,16 +94,18 @@ describe('parseDocsFileMethods()', () => {
   });
 
   it('collects ApiResponse status codes', () => {
-    writeDocs([
-      "docs(UsersController, {",
-      "  methods: {",
-      "    create: [",
-      "      ApiResponse({ status: 201 }),",
-      "      ApiResponse({ status: 400 }),",
-      "    ],",
-      "  },",
-      "});",
-    ].join('\n'));
+    writeDocs(
+      [
+        'docs(UsersController, {',
+        '  methods: {',
+        '    create: [',
+        '      ApiResponse({ status: 201 }),',
+        '      ApiResponse({ status: 400 }),',
+        '    ],',
+        '  },',
+        '});',
+      ].join('\n'),
+    );
 
     const result = parseDocsFileMethods(DOCS_PATH);
     expect(result.get('create')?.responseStatuses.has(201)).toBe(true);
@@ -100,18 +114,20 @@ describe('parseDocsFileMethods()', () => {
   });
 
   it('detects ApiBody presence and description', () => {
-    writeDocs([
-      "docs(UsersController, {",
-      "  methods: {",
-      "    create: [",
-      "      ApiBody({ type: CreateUserDto, description: 'payload' }),",
-      "    ],",
-      "    update: [",
-      "      ApiBody({ type: UpdateUserDto }),",
-      "    ],",
-      "  },",
-      "});",
-    ].join('\n'));
+    writeDocs(
+      [
+        'docs(UsersController, {',
+        '  methods: {',
+        '    create: [',
+        "      ApiBody({ type: CreateUserDto, description: 'payload' }),",
+        '    ],',
+        '    update: [',
+        '      ApiBody({ type: UpdateUserDto }),',
+        '    ],',
+        '  },',
+        '});',
+      ].join('\n'),
+    );
 
     const result = parseDocsFileMethods(DOCS_PATH);
     expect(result.get('create')?.hasApiBody).toBe(true);
@@ -127,7 +143,11 @@ describe('parseDocsFileMethods()', () => {
 
 describe('lintControllers()', () => {
   afterEach(() => {
-    try { fs.unlinkSync(DOCS_PATH); } catch { /* ignore */ }
+    try {
+      fs.unlinkSync(DOCS_PATH);
+    } catch {
+      /* ignore */
+    }
   });
 
   it('skips controllers with no docs file', () => {
@@ -137,22 +157,24 @@ describe('lintControllers()', () => {
   });
 
   it('skips methods not present in the docs file', () => {
-    writeDocs("docs(UsersController, { methods: {} });");
+    writeDocs('docs(UsersController, { methods: {} });');
     const ctrl = makeCtrl({ methods: [makeMethod({ name: 'findAll' })] });
     const issues = lintControllers([ctrl], 'ts');
     expect(issues).toHaveLength(0);
   });
 
   it('reports missing-summary when ApiOperation has no summary', () => {
-    writeDocs([
-      "docs(UsersController, {",
-      "  methods: {",
-      "    findAll: [",
-      "      ApiOperation({}),",
-      "    ],",
-      "  },",
-      "});",
-    ].join('\n'));
+    writeDocs(
+      [
+        'docs(UsersController, {',
+        '  methods: {',
+        '    findAll: [',
+        '      ApiOperation({}),',
+        '    ],',
+        '  },',
+        '});',
+      ].join('\n'),
+    );
 
     const ctrl = makeCtrl({ methods: [makeMethod({ name: 'findAll' })] });
     const issues = lintControllers([ctrl], 'ts');
@@ -163,15 +185,17 @@ describe('lintControllers()', () => {
   });
 
   it('does not report missing-summary when summary is present', () => {
-    writeDocs([
-      "docs(UsersController, {",
-      "  methods: {",
-      "    findAll: [",
-      "      ApiOperation({ summary: 'Find all' }),",
-      "    ],",
-      "  },",
-      "});",
-    ].join('\n'));
+    writeDocs(
+      [
+        'docs(UsersController, {',
+        '  methods: {',
+        '    findAll: [',
+        "      ApiOperation({ summary: 'Find all' }),",
+        '    ],',
+        '  },',
+        '});',
+      ].join('\n'),
+    );
 
     const ctrl = makeCtrl({ methods: [makeMethod({ name: 'findAll' })] });
     const issues = lintControllers([ctrl], 'ts');
@@ -179,16 +203,18 @@ describe('lintControllers()', () => {
   });
 
   it('reports missing-400-response only for methods with a @Body param', () => {
-    writeDocs([
-      "docs(UsersController, {",
-      "  methods: {",
-      "    create: [",
-      "      ApiOperation({ summary: 'Create' }),",
-      "      ApiResponse({ status: 201 }),",
-      "    ],",
-      "  },",
-      "});",
-    ].join('\n'));
+    writeDocs(
+      [
+        'docs(UsersController, {',
+        '  methods: {',
+        '    create: [',
+        "      ApiOperation({ summary: 'Create' }),",
+        '      ApiResponse({ status: 201 }),',
+        '    ],',
+        '  },',
+        '});',
+      ].join('\n'),
+    );
 
     const ctrl = makeCtrl({
       methods: [makeMethod({ name: 'create', httpDecorator: 'Post', params: [bodyParam()] })],
@@ -201,15 +227,17 @@ describe('lintControllers()', () => {
   });
 
   it('does not report missing-400-response for methods without a body', () => {
-    writeDocs([
-      "docs(UsersController, {",
-      "  methods: {",
-      "    findAll: [",
-      "      ApiOperation({ summary: 'Find all' }),",
-      "    ],",
-      "  },",
-      "});",
-    ].join('\n'));
+    writeDocs(
+      [
+        'docs(UsersController, {',
+        '  methods: {',
+        '    findAll: [',
+        "      ApiOperation({ summary: 'Find all' }),",
+        '    ],',
+        '  },',
+        '});',
+      ].join('\n'),
+    );
 
     const ctrl = makeCtrl({ methods: [makeMethod({ name: 'findAll' })] });
     const issues = lintControllers([ctrl], 'ts');
@@ -217,17 +245,19 @@ describe('lintControllers()', () => {
   });
 
   it('reports missing-body-description when ApiBody lacks description', () => {
-    writeDocs([
-      "docs(UsersController, {",
-      "  methods: {",
-      "    create: [",
-      "      ApiOperation({ summary: 'Create' }),",
-      "      ApiResponse({ status: 400 }),",
-      "      ApiBody({ type: CreateUserDto }),",
-      "    ],",
-      "  },",
-      "});",
-    ].join('\n'));
+    writeDocs(
+      [
+        'docs(UsersController, {',
+        '  methods: {',
+        '    create: [',
+        "      ApiOperation({ summary: 'Create' }),",
+        '      ApiResponse({ status: 400 }),',
+        '      ApiBody({ type: CreateUserDto }),',
+        '    ],',
+        '  },',
+        '});',
+      ].join('\n'),
+    );
 
     const ctrl = makeCtrl({
       methods: [makeMethod({ name: 'create', httpDecorator: 'Post', httpPath: ':id', params: [bodyParam()] })],
@@ -240,16 +270,18 @@ describe('lintControllers()', () => {
   });
 
   it('reports missing-body-description when ApiBody is absent entirely', () => {
-    writeDocs([
-      "docs(UsersController, {",
-      "  methods: {",
-      "    create: [",
-      "      ApiOperation({ summary: 'Create' }),",
-      "      ApiResponse({ status: 400 }),",
-      "    ],",
-      "  },",
-      "});",
-    ].join('\n'));
+    writeDocs(
+      [
+        'docs(UsersController, {',
+        '  methods: {',
+        '    create: [',
+        "      ApiOperation({ summary: 'Create' }),",
+        '      ApiResponse({ status: 400 }),',
+        '    ],',
+        '  },',
+        '});',
+      ].join('\n'),
+    );
 
     const ctrl = makeCtrl({
       methods: [makeMethod({ name: 'create', httpDecorator: 'Post', params: [bodyParam()] })],
@@ -259,18 +291,20 @@ describe('lintControllers()', () => {
   });
 
   it('reports no issues for a fully-compliant method', () => {
-    writeDocs([
-      "docs(UsersController, {",
-      "  methods: {",
-      "    create: [",
-      "      ApiOperation({ summary: 'Create' }),",
-      "      ApiResponse({ status: 201 }),",
-      "      ApiResponse({ status: 400 }),",
-      "      ApiBody({ type: CreateUserDto, description: 'payload' }),",
-      "    ],",
-      "  },",
-      "});",
-    ].join('\n'));
+    writeDocs(
+      [
+        'docs(UsersController, {',
+        '  methods: {',
+        '    create: [',
+        "      ApiOperation({ summary: 'Create' }),",
+        '      ApiResponse({ status: 201 }),',
+        '      ApiResponse({ status: 400 }),',
+        "      ApiBody({ type: CreateUserDto, description: 'payload' }),",
+        '    ],',
+        '  },',
+        '});',
+      ].join('\n'),
+    );
 
     const ctrl = makeCtrl({
       methods: [makeMethod({ name: 'create', httpDecorator: 'Post', params: [bodyParam()] })],
@@ -280,7 +314,7 @@ describe('lintControllers()', () => {
   });
 
   it('skips method names with invalid identifiers (security)', () => {
-    writeDocs("docs(UsersController, { methods: {} });");
+    writeDocs('docs(UsersController, { methods: {} });');
     const ctrl = makeCtrl({
       methods: [makeMethod({ name: 'evil); process.exit(1);//' })],
     });

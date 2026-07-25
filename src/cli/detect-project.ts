@@ -35,11 +35,7 @@ function exists(filePath: string): boolean {
 // Tsconfig candidate resolution (project-type-agnostic helper)
 // ---------------------------------------------------------------------------
 
-const TSCONFIG_CANDIDATES = [
-  'tsconfig.build.json',
-  'tsconfig.app.json',
-  'tsconfig.json',
-];
+const TSCONFIG_CANDIDATES = ['tsconfig.build.json', 'tsconfig.app.json', 'tsconfig.json'];
 
 function findTsconfig(appRoot: string, projectRoot: string): string {
   for (const candidate of TSCONFIG_CANDIDATES) {
@@ -51,9 +47,7 @@ function findTsconfig(appRoot: string, projectRoot: string): string {
       continue;
     }
   }
-  throw new ConfigNotFoundError(
-    `No tsconfig found in "${appRoot}". Tried: ${TSCONFIG_CANDIDATES.join(', ')}`,
-  );
+  throw new ConfigNotFoundError(`No tsconfig found in "${appRoot}". Tried: ${TSCONFIG_CANDIDATES.join(', ')}`);
 }
 
 // ---------------------------------------------------------------------------
@@ -133,10 +127,7 @@ function detectNx(root: string, tsconfigOverride?: string): ProjectContext {
       }
       if (!stat.isDirectory()) continue;
 
-      const projectJson = safeReadJson<NxProjectJson>(
-        path.join(appRoot, 'project.json'),
-        root,
-      );
+      const projectJson = safeReadJson<NxProjectJson>(path.join(appRoot, 'project.json'), root);
       if (!projectJson) continue;
 
       // Resolve tsconfig: prefer build target tsConfig, then fallback candidates
@@ -171,10 +162,7 @@ function detectNx(root: string, tsconfigOverride?: string): ProjectContext {
 
   // Also check workspace.json for older NX layouts
   if (apps.length === 0) {
-    const workspaceJson = safeReadJson<NxWorkspaceJson>(
-      path.join(root, 'workspace.json'),
-      root,
-    );
+    const workspaceJson = safeReadJson<NxWorkspaceJson>(path.join(root, 'workspace.json'), root);
     if (workspaceJson?.projects) {
       for (const [name, value] of Object.entries(workspaceJson.projects)) {
         const appRelRoot = typeof value === 'string' ? value : value.root;
@@ -220,11 +208,7 @@ interface NestCliJson {
   >;
 }
 
-function detectNestCliMonorepo(
-  root: string,
-  nestCliJson: NestCliJson,
-  tsconfigOverride?: string,
-): ProjectContext {
+function detectNestCliMonorepo(root: string, nestCliJson: NestCliJson, tsconfigOverride?: string): ProjectContext {
   const apps: ProjectApp[] = [];
 
   for (const [name, config] of Object.entries(nestCliJson.projects ?? {})) {
@@ -276,10 +260,7 @@ function detectNestCliMonorepo(
 // Strategy: generic monorepo (packages/ with sub-package.json)
 // ---------------------------------------------------------------------------
 
-function detectGenericMonorepo(
-  root: string,
-  tsconfigOverride?: string,
-): ProjectContext {
+function detectGenericMonorepo(root: string, tsconfigOverride?: string): ProjectContext {
   const apps: ProjectApp[] = [];
   const scanDirs = ['packages', 'apps', 'services'].map((d) => path.join(root, d));
 
@@ -349,10 +330,7 @@ function detectGenericMonorepo(
  *   3. packages/ or apps/ with sub-package.json → generic monorepo
  *   4. fallback → simple project
  */
-export function detectProject(
-  root: string,
-  tsconfigOverride?: string,
-): ProjectContext {
+export function detectProject(root: string, tsconfigOverride?: string): ProjectContext {
   const absRoot = path.resolve(root);
 
   // 1. NX
@@ -361,10 +339,7 @@ export function detectProject(
   }
 
   // 2. Nest CLI monorepo
-  const nestCli = safeReadJson<NestCliJson>(
-    path.join(absRoot, 'nest-cli.json'),
-    absRoot,
-  );
+  const nestCli = safeReadJson<NestCliJson>(path.join(absRoot, 'nest-cli.json'), absRoot);
   if (nestCli?.monorepo === true && nestCli.projects) {
     return detectNestCliMonorepo(absRoot, nestCli, tsconfigOverride);
   }
@@ -374,9 +349,7 @@ export function detectProject(
     const d = path.join(absRoot, dir);
     if (!exists(d)) return false;
     try {
-      return fs.readdirSync(d).some((entry) =>
-        exists(path.join(d, entry, 'package.json')),
-      );
+      return fs.readdirSync(d).some((entry) => exists(path.join(d, entry, 'package.json')));
     } catch {
       return false;
     }

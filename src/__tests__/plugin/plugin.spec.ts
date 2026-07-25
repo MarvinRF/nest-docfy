@@ -17,7 +17,13 @@ function fakeProgram(compilerOptions: Record<string, unknown>): any {
 describe('before() — nestjs-docfy CLI plugin entry', () => {
   beforeEach(() => {
     mockedGenerate.mockReset();
-    mockedGenerate.mockReturnValue({ outFile: '/x/docfy-metadata.json', patchedOperationCount: 0, controllersWithoutDocs: [], unparseableDocsFiles: [], scanErrors: [] });
+    mockedGenerate.mockReturnValue({
+      outFile: '/x/docfy-metadata.json',
+      patchedOperationCount: 0,
+      controllersWithoutDocs: [],
+      unparseableDocsFiles: [],
+      scanErrors: [],
+    });
   });
 
   it('throws when no program reference is provided', () => {
@@ -45,9 +51,7 @@ describe('before() — nestjs-docfy CLI plugin entry', () => {
     const program = fakeProgram({ configFilePath: '/project/tsconfig.json' });
     before({}, program);
 
-    expect(mockedGenerate).toHaveBeenCalledWith(
-      expect.objectContaining({ outDir: path.join('/project', 'dist') }),
-    );
+    expect(mockedGenerate).toHaveBeenCalledWith(expect.objectContaining({ outDir: path.join('/project', 'dist') }));
   });
 
   it('respects an explicit projectRoot/controllerGlob override', () => {
