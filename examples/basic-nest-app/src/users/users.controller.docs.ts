@@ -1,20 +1,18 @@
 import { ApiBody, ApiOperation, ApiQuery, ApiResponse, ApiTags } from '@nestjs/swagger';
 import { docs } from 'nestjs-docfy';
 import { UsersController } from './users.controller';
+import { UserRole } from './entities/user.entity';
 
 docs(UsersController, {
   classDecorators: [ApiTags('users')],
   methods: {
     findAll: [
       ApiOperation({ summary: 'List users', description: 'Optionally filter by role.' }),
-      // Array literal, not `enum: UserRole` — a TS enum *imported from
-      // another file* doesn't resolve today: the static extractor parses
-      // each docs file in an isolated in-memory project with no real
-      // filesystem/cross-file symbol resolution, so an imported enum
-      // reference silently falls back to no `enum` at all. Only an enum
-      // declared in the very same docs file would resolve. Tracked as a
-      // known limitation — see the README/roadmap notes.
-      ApiQuery({ name: 'role', required: false, enum: ['member', 'admin'] }),
+      // `enum: UserRole` — a real TS enum, imported from another file, not
+      // an array literal. Resolves because generateDocfyMetadata/patch-spec
+      // parse every controller's docs file inside the same real project
+      // that scanned the controller itself, not an isolated one.
+      ApiQuery({ name: 'role', required: false, enum: UserRole }),
       ApiResponse({
         status: 200,
         description: 'OK',

@@ -10,7 +10,7 @@ It uses the local `nestjs-docfy` package (`"nestjs-docfy": "file:../.."`), so it
 - `nest-cli.json` has `"webpack": true` **and** `"plugins": ["nestjs-docfy"]` — this app deliberately builds the hard way, the one `DocfyModule`'s runtime discovery cannot handle on its own.
 - `main.ts` calls `applyDocfyMetadata(document)` right after `SwaggerModule.createDocument()` — this is what actually fills in the docs under webpack, using the metadata the CLI plugin computed at build time.
 - `users.controller.docs.ts` showcases, in one file:
-  - `enum` on an `ApiQuery` (as an array literal — see the note in that file about why not a TS `enum` reference here)
+  - `enum: UserRole` on an `ApiQuery` — a real TS `enum`, imported from a different file (`entities/user.entity.ts`), not an array literal
   - a `oneOf` schema, inferred automatically from `findOne()`'s real return type `Promise<UserEntity | AdminUserEntity>` — no manual `schema:` needed
   - `examples` on an `ApiResponse`
   - class-validator → JSON Schema inference on `create()`'s body (`CreateUserDto` has no `@ApiProperty()` anywhere)
@@ -46,7 +46,3 @@ This app is wired for the **first** one, but all three read the exact same `user
    ```
    (Redundant against *this* app specifically, since `applyDocfyMetadata()` already patched the live document — this is what you'd run instead of registering the plugin, against the *unpatched* base document, e.g. right after `SwaggerModule.createDocument()` in a build script.)
 3. **Disable `webpack: true`** — remove it from `nest-cli.json` entirely and `DocfyModule`'s runtime mechanism handles everything on its own, no plugin or `applyDocfyMetadata()` needed. Try it: flip `webpack` to `false`, rebuild, and the startup warning disappears.
-
-## Known limitation this app works around
-
-`findAll`'s `role` query parameter uses `enum: ['member', 'admin']` (an array literal), not `enum: UserRole` (a reference to the real enum, imported from `./entities/user.entity`). The latter doesn't resolve today — each `.docs.ts` file is statically analyzed in isolation, with no cross-file symbol resolution, so an *imported* enum reference silently produces no `enum` at all rather than erroring. An enum declared in the same file as its usage would resolve correctly; this is tracked as a known gap, not a design choice. See the note in `users.controller.docs.ts` and the main README's "CLI — patch-spec" section.
