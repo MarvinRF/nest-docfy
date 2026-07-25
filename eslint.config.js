@@ -5,7 +5,7 @@ const globals = require('globals');
 
 module.exports = tseslint.config(
   {
-    ignores: ['dist', 'coverage', 'src/__tests__/cli/fixtures/**'],
+    ignores: ['dist', 'coverage', 'src/__tests__/cli/fixtures/**', 'examples/**'],
   },
   {
     extends: [js.configs.recommended, ...tseslint.configs.recommended],

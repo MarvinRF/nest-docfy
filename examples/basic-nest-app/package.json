@@ -1,0 +1,28 @@
+{
+  "name": "basic-nest-app",
+  "version": "0.0.0",
+  "private": true,
+  "description": "Runnable demo of nestjs-docfy: @WithDocs()/DocfyModule, the webpack:true CLI plugin + applyDocfyMetadata(), and patch-spec — see the README for all three.",
+  "scripts": {
+    "build": "nest build",
+    "start": "nest start",
+    "start:dev": "nest start --watch"
+  },
+  "dependencies": {
+    "@nestjs/common": "^11.0.0",
+    "@nestjs/core": "^11.0.0",
+    "@nestjs/platform-express": "^11.0.0",
+    "@nestjs/swagger": "^11.0.0",
+    "class-validator": "^0.14.1",
+    "nestjs-docfy": "file:../..",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.1"
+  },
+  "devDependencies": {
+    "@nestjs/cli": "^11.0.0",
+    "@types/node": "^22.0.0",
+    "ts-loader": "^9.5.1",
+    "typescript": "^5.7.3",
+    "webpack": "^5.97.1"
+  }
+}
