@@ -30,6 +30,7 @@ Keep your NestJS controllers clean. Swagger documentation lives in a dedicated c
 - [CLI — coverage](#cli--coverage)
 - [CLI — lint](#cli--lint)
 - [CLI — patch-spec](#cli--patch-spec)
+- [CLI — generate-client](#cli--generate-client)
 - [API reference](#api-reference)
   - [DocfyModule.forRoot()](#docfymoduleforrootoptions)
   - [@WithDocs()](#withdocs)
@@ -463,6 +464,39 @@ npx nestjs-docfy patch-spec --spec dist/openapi.json --out dist/openapi.json
 `example`/`examples` (and `schema`) are only applied when every value inside them is a literal — if even one nested value is a variable, function call, or other non-literal expression, the whole field is left out rather than risk leaking an internal "unresolved" marker into the document as if it were real data.
 
 **What this does _not_ do** (yet — this command is intentionally scoped, not a full reimplementation of `@nestjs/swagger`'s decorator semantics): `anyOf` (no TS construct maps onto "any of" the way a union type naturally maps onto `oneOf`), `links`/`callbacks` (`@nestjs/swagger` itself has no decorator option for either, so there's nothing in a `.docs.ts` file to read), and any decorator argument that isn't a literal (a variable, a function call, a spread) are left alone rather than guessed at — better to leave a field as the base document already had it than patch in something wrong. A union return type or `@Body()` payload only becomes a `oneOf` when _every_ branch resolves to a named DTO/entity — a partial guess is avoided by leaving the field alone entirely (falling back to no schema, same as an unresolvable type) if even one branch doesn't resolve. Routes a docs file documents that don't exist in `--spec` are reported as warnings, not silently dropped or errored on.
+
+## CLI — generate-client
+
+Generates a typed TypeScript client from an OpenAPI document — a thin wrapper over [`openapi-typescript`](https://openapi-ts.dev) (types) and [`openapi-fetch`](https://openapi-ts.dev/openapi-fetch) (the runtime client), not a from-scratch code generator.
+
+```bash
+npx nestjs-docfy generate-client --spec <path-or-url> [options]
+```
+
+| Option               | Default              | Description                                                         |
+| -------------------- | -------------------- | ------------------------------------------------------------------- |
+| `--spec <path\|url>` | _(required)_         | A local `openapi.json`, or a URL (e.g. a running app's `/api-json`) |
+| `--out <path>`       | `./generated-client` | Output directory for `schema.d.ts` and `client.ts`                  |
+| `--root <path>`      | `.`                  | Project root directory                                              |
+| `--quiet`            | `false`              | Suppress all output except errors                                   |
+
+```bash
+npx nestjs-docfy generate-client --spec http://localhost:3000/api-json --out src/api-client
+```
+
+Writes two files:
+
+- **`schema.d.ts`** — the generated types (`paths`, `components`, `operations`), via `openapi-typescript`.
+- **`client.ts`** — a small wrapper exporting `createApiClient(baseUrl)`, typed against `schema.d.ts`.
+
+```ts
+import { createApiClient } from './api-client/client';
+
+const api = createApiClient('https://api.example.com');
+const { data, error } = await api.GET('/users/{id}', { params: { path: { id: '123' } } });
+```
+
+`openapi-fetch` is **not** a dependency of `nestjs-docfy` itself — only the generated `client.ts` imports it, so install it in your own project: `npm install openapi-fetch`.
 
 ## API reference
 

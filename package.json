@@ -118,6 +118,7 @@
     "commander": "^15.0.0",
     "docfy-ui": "^0.1.0",
     "express": "^5.0.0",
+    "openapi-typescript": "^7.13.0",
     "picocolors": "^1.1.1",
     "source-map": "^0.6.1",
     "ts-morph": "^28.0.0"

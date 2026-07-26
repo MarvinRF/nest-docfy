@@ -1,5 +1,6 @@
 #!/usr/bin/env node
 import * as fs from 'fs';
+import * as path from 'path';
 import { Command } from 'commander';
 import pc from 'picocolors';
 import { parseAndValidateOptions, resolveAndValidate, type CliOptions } from './parse-args';
@@ -14,6 +15,8 @@ import { checkControllers } from './check';
 import { computeCoverage } from './coverage';
 import { lintControllers } from './lint';
 import { computePatchedDocument } from './patch-spec';
+import { readSpecSource } from './read-spec-source';
+import { buildClientFiles } from './generate-client';
 import type { OpenApiDocument } from './merge-spec-patch';
 
 const program = new Command();
@@ -471,44 +474,6 @@ program
 // patch-spec command
 // ---------------------------------------------------------------------------
 
-async function readSpecSource(source: string, root: string): Promise<OpenApiDocument> {
-  let text: string;
-  if (/^https?:\/\//.test(source)) {
-    const fetchFn = (globalThis as any).fetch as
-      undefined | ((url: string) => Promise<{ ok: boolean; status: number; text(): Promise<string> }>);
-    if (!fetchFn) {
-      throw new CliError(
-        'Fetching --spec from a URL requires a Node version with global fetch (Node 18+).',
-        CliExitCode.Fatal,
-      );
-    }
-    const res = await fetchFn(source);
-    if (!res.ok) {
-      throw new CliError(`Failed to fetch --spec from ${source}: HTTP ${res.status}`, CliExitCode.Fatal);
-    }
-    text = await res.text();
-  } else {
-    const resolved = resolveAndValidate(source, root, '--spec');
-    try {
-      text = fs.readFileSync(resolved, 'utf8');
-    } catch (err) {
-      throw new CliError(
-        `Could not read --spec file at ${resolved}: ${err instanceof Error ? err.message : String(err)}`,
-        CliExitCode.Fatal,
-      );
-    }
-  }
-
-  try {
-    return JSON.parse(text) as OpenApiDocument;
-  } catch (err) {
-    throw new CliError(
-      `--spec did not contain valid JSON: ${err instanceof Error ? err.message : String(err)}`,
-      CliExitCode.Fatal,
-    );
-  }
-}
-
 program
   .command('patch-spec')
   .description(
@@ -586,6 +551,62 @@ program
       } else {
         process.stdout.write(`${output}\n`);
       }
+
+      process.exit(CliExitCode.Ok);
+    } catch (err) {
+      if (err instanceof CliError) {
+        process.stderr.write(`\n${pc.red('✖ Error:')} ${err.message}\n\n`);
+        process.exit(err.exitCode);
+      }
+      if (err instanceof Error) {
+        process.stderr.write(`\n${pc.red('✖ Error:')} ${err.message}\n\n`);
+      } else {
+        process.stderr.write(`\n${pc.red('✖ Unknown error')}\n\n`);
+      }
+      process.exit(CliExitCode.Fatal);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// generate-client command
+// ---------------------------------------------------------------------------
+
+program
+  .command('generate-client')
+  .description(
+    'Generate a typed TypeScript client from an OpenAPI document — a thin wrapper over ' +
+      'openapi-typescript (types) and openapi-fetch (runtime client), not a from-scratch generator.',
+  )
+  .requiredOption(
+    '--spec <path-or-url>',
+    'Path to a local openapi.json, or a URL (e.g. http://localhost:3000/api-json)',
+  )
+  .option('--out <path>', 'Output directory for schema.d.ts and client.ts', './generated-client')
+  .option('--root <path>', 'Project root directory', '.')
+  .option('--quiet', 'Suppress all output except errors', false)
+  .action(async (rawOpts: Record<string, unknown>) => {
+    try {
+      const root = path.resolve(String(rawOpts.root ?? '.'));
+      setQuiet(Boolean(rawOpts.quiet));
+
+      header('nestjs-docfy generate-client');
+      log('info', `Root: ${root}`);
+      log('info', `Spec: ${String(rawOpts.spec)}`);
+
+      const document: OpenApiDocument = await readSpecSource(String(rawOpts.spec), root);
+      const outDir = resolveAndValidate(String(rawOpts.out ?? './generated-client'), root, '--out');
+      fs.mkdirSync(outDir, { recursive: true });
+
+      const { schema, client } = await buildClientFiles(document);
+      fs.writeFileSync(path.join(outDir, 'schema.d.ts'), schema);
+      fs.writeFileSync(path.join(outDir, 'client.ts'), client);
+
+      log('success', `Written ${path.join(outDir, 'schema.d.ts')}`);
+      log('success', `Written ${path.join(outDir, 'client.ts')}`);
+      log(
+        'info',
+        `Next: npm install openapi-fetch in your project, then import { createApiClient } from '${path.relative(root, outDir) || '.'}/client'.`,
+      );
 
       process.exit(CliExitCode.Ok);
     } catch (err) {

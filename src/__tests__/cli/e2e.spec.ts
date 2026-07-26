@@ -6,6 +6,7 @@
  */
 import { execSync, ExecSyncOptionsWithBufferEncoding } from 'child_process';
 import fs from 'fs';
+import os from 'os';
 import path from 'path';
 
 const CLI = path.join(__dirname, '../../../dist/cli/index.js');
@@ -260,5 +261,98 @@ describe('E2E — security: output confinement', () => {
         .filter((l) => !l.trimStart().startsWith('//') && !l.trimStart().startsWith('*'));
       expect(codeLines.join('\n')).not.toContain('process.exit');
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// generate-client
+// ---------------------------------------------------------------------------
+// Run as a spawned process (like every other suite here), not required
+// in-process: openapi-typescript's CJS build pulls in a chain of ESM-only
+// transitive deps (parse-json, supports-color, ...) that Jest's own
+// require() hook can't load, but a real `node dist/cli/index.js` process
+// resolves them fine — the exact same reason this file spawns everything.
+describe('E2E — generate-client', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'docfy-generate-client-e2e-'));
+    fs.writeFileSync(
+      path.join(tmpDir, 'spec.json'),
+      JSON.stringify({
+        openapi: '3.0.3',
+        info: { title: 'Test API', version: '1.0.0' },
+        paths: {
+          '/users': {
+            get: {
+              operationId: 'findAllUsers',
+              responses: {
+                '200': {
+                  description: 'OK',
+                  content: {
+                    'application/json': {
+                      schema: { type: 'array', items: { $ref: '#/components/schemas/User' } },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+        components: {
+          schemas: {
+            User: {
+              type: 'object',
+              properties: { id: { type: 'string' }, email: { type: 'string' } },
+              required: ['id', 'email'],
+            },
+          },
+        },
+      }),
+    );
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  it('writes schema.d.ts and client.ts to the default output directory', () => {
+    const { code } = run(`generate-client --spec ./spec.json`, tmpDir);
+    expect(code).toBe(0);
+    expect(fs.existsSync(path.join(tmpDir, 'generated-client/schema.d.ts'))).toBe(true);
+    expect(fs.existsSync(path.join(tmpDir, 'generated-client/client.ts'))).toBe(true);
+  });
+
+  it('generates a paths interface matching the spec', () => {
+    run(`generate-client --spec ./spec.json`, tmpDir);
+    const schema = fs.readFileSync(path.join(tmpDir, 'generated-client/schema.d.ts'), 'utf8');
+    expect(schema).toContain('export interface paths');
+    expect(schema).toContain('"/users"');
+    expect(schema).toContain('findAllUsers');
+  });
+
+  it('generates a client.ts importing openapi-fetch and the generated types', () => {
+    run(`generate-client --spec ./spec.json`, tmpDir);
+    const client = fs.readFileSync(path.join(tmpDir, 'generated-client/client.ts'), 'utf8');
+    expect(client).toContain("from 'openapi-fetch'");
+    expect(client).toContain("from './schema'");
+    expect(client).toContain('export function createApiClient');
+  });
+
+  it('respects a custom --out directory', () => {
+    const { code } = run(`generate-client --spec ./spec.json --out ./custom-out`, tmpDir);
+    expect(code).toBe(0);
+    expect(fs.existsSync(path.join(tmpDir, 'custom-out/schema.d.ts'))).toBe(true);
+  });
+
+  it('exits with a fatal error when --spec points to a missing file', () => {
+    const { code, stderr } = run(`generate-client --spec ./missing.json`, tmpDir);
+    expect(code).not.toBe(0);
+    expect(stderr).toMatch(/Could not read --spec file/);
+  });
+
+  it('rejects an --out path that escapes the project root', () => {
+    const { code } = run(`generate-client --spec ./spec.json --out ../../../etc`, tmpDir);
+    expect(code).not.toBe(0);
   });
 });
