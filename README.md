@@ -221,16 +221,18 @@ npx nestjs-docfy generate [options]
 
 ### Options
 
-| Option              | Default                   | Description                                                       |
-| ------------------- | ------------------------- | ----------------------------------------------------------------- |
-| `--root <path>`     | `.`                       | Project root directory                                            |
-| `--tsconfig <path>` | auto-detected             | Path to `tsconfig.json`                                           |
-| `--pattern <glob>`  | `**/*.controller.ts`      | Glob pattern to find controllers                                  |
-| `--out <path>`      | alongside each controller | Output directory for generated files                              |
-| `--force`           | `false`                   | Merge new methods into existing docs files (preserves user edits) |
-| `--dry-run`         | `false`                   | Print what would be generated without writing files               |
-| `--quiet`           | `false`                   | Suppress all output except errors (CI-friendly)                   |
-| `--format`          | `ts`                      | Output format: `ts` or `js`                                       |
+| Option              | Default                   | Description                                                                                                         |
+| ------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------- |
+| `--root <path>`     | `.`                       | Project root directory                                                                                              |
+| `--tsconfig <path>` | auto-detected             | Path to `tsconfig.json`                                                                                             |
+| `--pattern <glob>`  | `**/*.controller.ts`      | Glob pattern to find controllers                                                                                    |
+| `--out <path>`      | alongside each controller | Output directory for generated files                                                                                |
+| `--force`           | `false`                   | Merge new methods into existing docs files (preserves user edits)                                                   |
+| `--dry-run`         | `false`                   | Print what would be generated without writing files                                                                 |
+| `--quiet`           | `false`                   | Suppress all output except errors (CI-friendly)                                                                     |
+| `--format`          | `ts`                      | Output format: `ts` or `js`                                                                                         |
+| `--watch`           | `false`                   | Re-generate on controller file changes                                                                              |
+| `--register-plugin` | `false`                   | If `webpack: true` is set without the CLI plugin, add `nestjs-docfy` to `nest-cli.json`'s `compilerOptions.plugins` |
 
 ### Project types
 

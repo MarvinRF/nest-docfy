@@ -320,7 +320,7 @@ function detectGenericMonorepo(root: string, tsconfigOverride?: string): Project
 // webpack: true without the CLI plugin registered
 // ---------------------------------------------------------------------------
 
-function pluginListHasDocfy(plugins: unknown[]): boolean {
+export function pluginListHasDocfy(plugins: unknown[]): boolean {
   return plugins.some((p) => {
     if (typeof p === 'string') return p === 'nestjs-docfy';
     if (p && typeof p === 'object' && 'name' in p) return (p as { name?: unknown }).name === 'nestjs-docfy';

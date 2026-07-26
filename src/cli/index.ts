@@ -6,6 +6,7 @@ import { parseAndValidateOptions, resolveAndValidate, type CliOptions } from './
 import { setQuiet, log, header, summary } from './logger';
 import { CliError, CliExitCode } from './errors';
 import { detectProject, hasWebpackWithoutPlugin } from './detect-project';
+import { registerWebpackPlugin } from './register-webpack-plugin';
 import { scanAllApps } from './scan-controllers';
 import { writeAllDocs } from './writer';
 import { watchProject } from './watch';
@@ -47,10 +48,20 @@ function runPipeline(options: CliOptions, silent = false): number {
     );
 
     if (hasWebpackWithoutPlugin(context.root)) {
-      log(
-        'warn',
-        `This project builds with "webpack": true — @WithDocs()/DocfyModule runtime discovery does not work in that mode. Register ${pc.cyan('nestjs-docfy')} under compilerOptions.plugins in nest-cli.json (see the "webpack-cli-plugin" guide), or use ${pc.cyan('patch-spec')} instead.`,
-      );
+      if (options.registerPlugin) {
+        const result = registerWebpackPlugin(context.root, options.dryRun);
+        if (result?.changed) {
+          log(
+            options.dryRun ? 'dry' : 'success',
+            `${options.dryRun ? 'Would register' : 'Registered'} ${pc.cyan('nestjs-docfy')} under compilerOptions.plugins in ${result.path}`,
+          );
+        }
+      } else {
+        log(
+          'warn',
+          `This project builds with "webpack": true — @WithDocs()/DocfyModule runtime discovery does not work in that mode. Register ${pc.cyan('nestjs-docfy')} under compilerOptions.plugins in nest-cli.json (see the "webpack-cli-plugin" guide), run ${pc.cyan('generate --register-plugin')} to do it automatically, or use ${pc.cyan('patch-spec')} instead.`,
+        );
+      }
     }
   }
 
@@ -131,6 +142,11 @@ program
   .option('--quiet', 'Suppress all output except errors', false)
   .option('--format <format>', 'Output format: ts or js', 'ts')
   .option('--watch', 'Re-generate on controller file changes', false)
+  .option(
+    '--register-plugin',
+    'If webpack:true is set without the CLI plugin, add nestjs-docfy to nest-cli.json compilerOptions.plugins',
+    false,
+  )
   .action(async (rawOpts: Record<string, unknown>) => {
     try {
       const options = parseAndValidateOptions(rawOpts as Parameters<typeof parseAndValidateOptions>[0]);
