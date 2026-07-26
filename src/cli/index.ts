@@ -62,7 +62,7 @@ function runPipeline(options: CliOptions, silent = false): number {
       } else {
         log(
           'warn',
-          `This project builds with "webpack": true — @WithDocs()/DocfyModule runtime discovery does not work in that mode. Register ${pc.cyan('nestjs-docfy')} under compilerOptions.plugins in nest-cli.json (see the "webpack-cli-plugin" guide), run ${pc.cyan('generate --register-plugin')} to do it automatically, or use ${pc.cyan('patch-spec')} instead.`,
+          `This project builds with "webpack": true, so @WithDocs()/DocfyModule runtime discovery does not work in that mode. Register ${pc.cyan('nestjs-docfy')} under compilerOptions.plugins in nest-cli.json (see the "webpack-cli-plugin" guide), run ${pc.cyan('generate --register-plugin')} to do it automatically, or use ${pc.cyan('patch-spec')} instead.`,
         );
       }
     }
@@ -110,7 +110,7 @@ function runPipeline(options: CliOptions, silent = false): number {
         created++;
         break;
       case 'skipped':
-        log('skip', `${r.controllerClass} → ${r.docsFilePath}  ${pc.gray('[skipped — already exists]')}`);
+        log('skip', `${r.controllerClass} → ${r.docsFilePath}  ${pc.gray('[skipped: already exists]')}`);
         skipped++;
         break;
       case 'dry':
@@ -165,8 +165,8 @@ program
       log('info', `Pattern: ${options.pattern}`);
       log('info', `Format: ${options.format}`);
       if (options.tsconfig) log('info', `Tsconfig: ${options.tsconfig}`);
-      if (options.force) log('warn', 'Force mode — new methods merged, existing decorators preserved.');
-      if (options.dryRun) log('dry', 'Dry-run mode — no files will be written.');
+      if (options.force) log('warn', 'Force mode: new methods merged, existing decorators preserved.');
+      if (options.dryRun) log('dry', 'Dry-run mode: no files will be written.');
       if (options.watch) log('info', 'Watch mode enabled.');
 
       // Initial run
@@ -223,7 +223,7 @@ program
 
 program
   .command('check')
-  .description('Verify all controllers are fully documented — exits 1 if any drift is found')
+  .description('Verify all controllers are fully documented, exits 1 if any drift is found')
   .option('--root <path>', 'Project root directory', '.')
   .option('--tsconfig <path>', 'Path to tsconfig.json (auto-detected if omitted)')
   .option('--pattern <glob>', 'Glob pattern to find controllers', '**/*.controller.ts')
@@ -295,9 +295,9 @@ program
 
       for (const issue of issues) {
         if (issue.kind === 'missing-file') {
-          log('error', `${issue.controllerClass} — no companion docs file found at ${issue.docsFile}`);
+          log('error', `${issue.controllerClass}: no companion docs file found at ${issue.docsFile}`);
         } else {
-          log('error', `${issue.controllerClass} — undocumented methods: ${issue.methods!.join(', ')}`);
+          log('error', `${issue.controllerClass}: undocumented methods: ${issue.methods!.join(', ')}`);
           log('info', `  → run ${pc.cyan('nestjs-docfy generate --force')} to merge new methods`);
         }
       }
@@ -333,7 +333,7 @@ program
   .option('--tsconfig <path>', 'Path to tsconfig.json (auto-detected if omitted)')
   .option('--pattern <glob>', 'Glob pattern to find controllers', '**/*.controller.ts')
   .option('--format <format>', 'Docs file format to look for: ts or js', 'ts')
-  .option('--min <percent>', 'Minimum coverage percentage required — exits 1 if below')
+  .option('--min <percent>', 'Minimum coverage percentage required, exits 1 if below')
   .option('--json', 'Output a single machine-readable JSON object instead of formatted text', false)
   .option('--quiet', 'Suppress all output except errors', false)
   .action(async (rawOpts: Record<string, unknown>) => {
@@ -455,7 +455,7 @@ program
 
 program
   .command('lint')
-  .description('Check documentation quality — missing summaries, error responses, body descriptions')
+  .description('Check documentation quality: missing summaries, error responses, body descriptions')
   .option('--root <path>', 'Project root directory', '.')
   .option('--tsconfig <path>', 'Path to tsconfig.json (auto-detected if omitted)')
   .option('--pattern <glob>', 'Glob pattern to find controllers', '**/*.controller.ts')
@@ -542,7 +542,7 @@ program
   .command('patch-spec')
   .description(
     "Patch an already-built OpenAPI document with every controller's companion docs file, " +
-      'using static analysis only — no runtime require(), no decorators applied to any class. ' +
+      'using static analysis only. No runtime require(), no decorators applied to any class. ' +
       'Works under any build mode, including NestJS CLI\'s "webpack: true" (see README).',
   )
   .requiredOption(
@@ -638,7 +638,7 @@ program
 program
   .command('generate-client')
   .description(
-    'Generate a typed TypeScript client from an OpenAPI document — a thin wrapper over ' +
+    'Generate a typed TypeScript client from an OpenAPI document, a thin wrapper over ' +
       'openapi-typescript (types) and openapi-fetch (runtime client), not a from-scratch generator.',
   )
   .requiredOption(
