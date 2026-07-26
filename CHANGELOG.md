@@ -1,3 +1,21 @@
+# [0.6.0](https://github.com/MarvinRF/nest-docfy/compare/v0.5.0...v0.6.0) (2026-07-26)
+
+
+### Bug Fixes
+
+* widen docfy-ui dependency range to include the 0.1.0 release ([843d0d9](https://github.com/MarvinRF/nest-docfy/commit/843d0d99468d5182f3b6cbf36d8325eabc8cef20))
+
+
+### Features
+
+* **ci:** PR-check bot — dogfoods check/coverage against the example app ([83277e6](https://github.com/MarvinRF/nest-docfy/commit/83277e617e7a1759fcbb3c5a40e9cad2605802b0))
+* **cli:** --json flag for check and coverage ([cfd503d](https://github.com/MarvinRF/nest-docfy/commit/cfd503d34283dcf03eb15c671f2185b59e63e743))
+* **docfy-ui-module:** add specs option for docfy-ui's multi-spec switcher ([01a884f](https://github.com/MarvinRF/nest-docfy/commit/01a884f89ea0226a8ce72dec8e3587a6ccc7fb79))
+* **generate:** --register-plugin auto-fixes webpack:true without the CLI plugin ([06362f7](https://github.com/MarvinRF/nest-docfy/commit/06362f74660cc992e969e39d9c64b5d98230b764))
+* generate-client command — typed TS client from an OpenAPI spec ([d8e21c7](https://github.com/MarvinRF/nest-docfy/commit/d8e21c77c13b8f9dfeefe582bbff90bd803943cd))
+* **generate:** warn when webpack:true is set without the CLI plugin ([2f62327](https://github.com/MarvinRF/nest-docfy/commit/2f62327301f116f3264b5f96be281a396e9ac0b7))
+* **readme:** add --json option to CLI commands for machine-readable output ([5e8e952](https://github.com/MarvinRF/nest-docfy/commit/5e8e952f370717dee1c5d6069ca8e26aaca14222))
+
 # 0.5.0 (2026-07-25)
 
 
