@@ -274,13 +274,14 @@ Verify that every controller is fully documented before merging. Exits with code
 npx nestjs-docfy check [options]
 ```
 
-| Option              | Default              | Description                                |
-| ------------------- | -------------------- | ------------------------------------------ |
-| `--root <path>`     | `.`                  | Project root directory                     |
-| `--tsconfig <path>` | auto-detected        | Path to `tsconfig.json`                    |
-| `--pattern <glob>`  | `**/*.controller.ts` | Glob pattern to find controllers           |
-| `--format <format>` | `ts`                 | Docs file format to look for: `ts` or `js` |
-| `--quiet`           | `false`              | Suppress all output except errors          |
+| Option              | Default              | Description                                                                                                       |
+| ------------------- | -------------------- | ----------------------------------------------------------------------------------------------------------------- |
+| `--root <path>`     | `.`                  | Project root directory                                                                                            |
+| `--tsconfig <path>` | auto-detected        | Path to `tsconfig.json`                                                                                           |
+| `--pattern <glob>`  | `**/*.controller.ts` | Glob pattern to find controllers                                                                                  |
+| `--format <format>` | `ts`                 | Docs file format to look for: `ts` or `js`                                                                        |
+| `--json`            | `false`              | Output a single machine-readable JSON object instead of formatted text — `{ controllersChecked, issues, passed }` |
+| `--quiet`           | `false`              | Suppress all output except errors                                                                                 |
 
 **What it checks:**
 
@@ -322,14 +323,15 @@ Measure what percentage of your endpoints are documented. Useful as an objective
 npx nestjs-docfy coverage [options]
 ```
 
-| Option              | Default              | Description                                            |
-| ------------------- | -------------------- | ------------------------------------------------------ |
-| `--root <path>`     | `.`                  | Project root directory                                 |
-| `--tsconfig <path>` | auto-detected        | Path to `tsconfig.json`                                |
-| `--pattern <glob>`  | `**/*.controller.ts` | Glob pattern to find controllers                       |
-| `--format <format>` | `ts`                 | Docs file format to look for: `ts` or `js`             |
-| `--min <percent>`   | none                 | Minimum coverage required (0-100) — exits `1` if below |
-| `--quiet`           | `false`              | Suppress all output except errors                      |
+| Option              | Default              | Description                                                                                                                  |
+| ------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
+| `--root <path>`     | `.`                  | Project root directory                                                                                                       |
+| `--tsconfig <path>` | auto-detected        | Path to `tsconfig.json`                                                                                                      |
+| `--pattern <glob>`  | `**/*.controller.ts` | Glob pattern to find controllers                                                                                             |
+| `--format <format>` | `ts`                 | Docs file format to look for: `ts` or `js`                                                                                   |
+| `--min <percent>`   | none                 | Minimum coverage required (0-100) — exits `1` if below                                                                       |
+| `--json`            | `false`              | Output a single machine-readable JSON object instead of formatted text — the `CoverageReport` fields plus `min` and `passed` |
+| `--quiet`           | `false`              | Suppress all output except errors                                                                                            |
 
 **Example output:**
 
@@ -366,6 +368,8 @@ Or as an npm script:
   }
 }
 ```
+
+**PR bot**: this repo's own [`.github/workflows/pr-check.yml`](.github/workflows/pr-check.yml) is a real example of a GitHub Actions job that runs `check --json` and `coverage --json --min` against a project and posts (and updates, never spams) a single PR comment summarizing the result — see [`.github/scripts/pr-comment.mjs`](.github/scripts/pr-comment.mjs) for the comment logic, built entirely on `--json` output and native `fetch`, no extra dependencies.
 
 ## CLI — lint
 
