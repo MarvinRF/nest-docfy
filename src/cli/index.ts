@@ -5,7 +5,7 @@ import pc from 'picocolors';
 import { parseAndValidateOptions, resolveAndValidate, type CliOptions } from './parse-args';
 import { setQuiet, log, header, summary } from './logger';
 import { CliError, CliExitCode } from './errors';
-import { detectProject } from './detect-project';
+import { detectProject, hasWebpackWithoutPlugin } from './detect-project';
 import { scanAllApps } from './scan-controllers';
 import { writeAllDocs } from './writer';
 import { watchProject } from './watch';
@@ -45,6 +45,13 @@ function runPipeline(options: CliOptions, silent = false): number {
       'success',
       `Project type: ${kindLabel[context.kind]} (${context.apps.length} app${context.apps.length !== 1 ? 's' : ''})`,
     );
+
+    if (hasWebpackWithoutPlugin(context.root)) {
+      log(
+        'warn',
+        `This project builds with "webpack": true — @WithDocs()/DocfyModule runtime discovery does not work in that mode. Register ${pc.cyan('nestjs-docfy')} under compilerOptions.plugins in nest-cli.json (see the "webpack-cli-plugin" guide), or use ${pc.cyan('patch-spec')} instead.`,
+      );
+    }
   }
 
   const scanResult = scanAllApps(

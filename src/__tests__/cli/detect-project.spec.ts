@@ -1,5 +1,5 @@
 import path from 'path';
-import { detectProject } from '../../cli/detect-project';
+import { detectProject, hasWebpackWithoutPlugin } from '../../cli/detect-project';
 import { PathTraversalError } from '../../cli/errors';
 
 const FIXTURES = path.join(__dirname, 'fixtures');
@@ -118,5 +118,27 @@ describe('detectProject() — security: path traversal in fixture paths', () => 
   it('does not throw PathTraversalError for valid fixture roots', () => {
     expect(() => detectProject(fix('simple'))).not.toThrow(PathTraversalError);
     expect(() => detectProject(fix('nx'))).not.toThrow(PathTraversalError);
+  });
+});
+
+describe('hasWebpackWithoutPlugin()', () => {
+  it('is true when webpack is true and no plugin is registered', () => {
+    expect(hasWebpackWithoutPlugin(fix('webpack-no-plugin'))).toBe(true);
+  });
+
+  it('is false when the plugin is registered as a string entry', () => {
+    expect(hasWebpackWithoutPlugin(fix('webpack-with-plugin'))).toBe(false);
+  });
+
+  it('is false when the plugin is registered as an object entry', () => {
+    expect(hasWebpackWithoutPlugin(fix('webpack-with-plugin-object'))).toBe(false);
+  });
+
+  it('is false when there is no nest-cli.json at all', () => {
+    expect(hasWebpackWithoutPlugin(fix('simple'))).toBe(false);
+  });
+
+  it('is false when nest-cli.json has no compilerOptions.webpack', () => {
+    expect(hasWebpackWithoutPlugin(fix('nest-cli'))).toBe(false);
   });
 });

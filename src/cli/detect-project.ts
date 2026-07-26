@@ -206,6 +206,7 @@ interface NestCliJson {
       compilerOptions?: { tsConfigPath?: string };
     }
   >;
+  compilerOptions?: { webpack?: boolean; plugins?: unknown[] };
 }
 
 function detectNestCliMonorepo(root: string, nestCliJson: NestCliJson, tsconfigOverride?: string): ProjectContext {
@@ -313,6 +314,31 @@ function detectGenericMonorepo(root: string, tsconfigOverride?: string): Project
   }
 
   return { kind: 'generic-monorepo', root, apps };
+}
+
+// ---------------------------------------------------------------------------
+// webpack: true without the CLI plugin registered
+// ---------------------------------------------------------------------------
+
+function pluginListHasDocfy(plugins: unknown[]): boolean {
+  return plugins.some((p) => {
+    if (typeof p === 'string') return p === 'nestjs-docfy';
+    if (p && typeof p === 'object' && 'name' in p) return (p as { name?: unknown }).name === 'nestjs-docfy';
+    return false;
+  });
+}
+
+/**
+ * True when the target project's nest-cli.json has `webpack: true` but does
+ * not register `nestjs-docfy` under `compilerOptions.plugins` — the runtime
+ * discovery mechanism (`@WithDocs()` + `DocfyModule`) silently does not work
+ * in that build mode, and the CLI plugin is the sanctioned fix.
+ */
+export function hasWebpackWithoutPlugin(root: string): boolean {
+  const nestCli = safeReadJson<NestCliJson>(path.join(root, 'nest-cli.json'), root);
+  const compilerOptions = nestCli?.compilerOptions;
+  if (!compilerOptions?.webpack) return false;
+  return !pluginListHasDocfy(compilerOptions.plugins ?? []);
 }
 
 // ---------------------------------------------------------------------------
