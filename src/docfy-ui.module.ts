@@ -53,6 +53,17 @@ export interface DocfyUiSetupOptions {
    * `{ raw: false }`) when using `staticSpecPath` on a Fastify app.
    */
   staticSpecPath?: string;
+
+  /**
+   * List of OpenAPI specs to offer in docfy-ui's spec switcher — useful when
+   * one docfy-ui instance should let users browse multiple services without
+   * leaving the UI. Each `url` is fetched client-side exactly like the
+   * default `/api-json` spec is, so it can point at another same-origin
+   * route or a different origin (subject to that origin's CORS policy).
+   * When omitted (the default), docfy-ui behaves exactly as before —
+   * a single spec, no switcher rendered.
+   */
+  specs?: { name: string; url: string }[];
 }
 
 function loadFastifyStatic(): unknown {
@@ -113,11 +124,14 @@ export class DocfyUiModule {
     const indexHtmlPath = require.resolve('docfy-ui/dist/index.html');
     const uiDir = path.dirname(indexHtmlPath);
     const basePath = mountPath === '/' ? '/' : `${mountPath.replace(/\/+$/, '')}/`;
+    const specsScript = options.specs
+      ? `\n    <script>window.__DOCFY_SPECS__ = ${JSON.stringify(options.specs)};</script>`
+      : '';
     const indexHtml = fs
       .readFileSync(indexHtmlPath, 'utf8')
       .replace(
         '<head>',
-        `<head>\n    <base href="${basePath}" />\n    <script>window.__DOCFY_BASE_PATH__ = ${JSON.stringify(basePath)};</script>`,
+        `<head>\n    <base href="${basePath}" />\n    <script>window.__DOCFY_BASE_PATH__ = ${JSON.stringify(basePath)};</script>${specsScript}`,
       );
 
     if (isFastify) {

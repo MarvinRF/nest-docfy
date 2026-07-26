@@ -140,6 +140,34 @@ describe('DocfyUiModule.setup() — Express', () => {
     const { app } = makeRecordingApp();
     expect(() => DocfyUiModule.setup('/docs', app, { staticSpecPath: '/nonexistent/openapi.json' })).toThrow();
   });
+
+  it('does not inject window.__DOCFY_SPECS__ when specs is omitted', () => {
+    const { app, calls } = makeRecordingApp();
+    DocfyUiModule.setup('/docs', app);
+
+    const fallback = calls.filter((c) => c.args[0] === '/docs').at(-1)!;
+    const handler = fallback.args[1] as (req: unknown, res: ReturnType<typeof makeMockResponse>) => void;
+    const res = makeMockResponse();
+    handler(undefined, res);
+
+    expect(res.body).not.toContain('__DOCFY_SPECS__');
+  });
+
+  it('injects window.__DOCFY_SPECS__ as JSON when specs is provided', () => {
+    const { app, calls } = makeRecordingApp();
+    const specs = [
+      { name: 'users-service', url: '/users-service/api-json' },
+      { name: 'orders-service', url: 'https://orders.internal/api-json' },
+    ];
+    DocfyUiModule.setup('/docs', app, { specs });
+
+    const fallback = calls.filter((c) => c.args[0] === '/docs').at(-1)!;
+    const handler = fallback.args[1] as (req: unknown, res: ReturnType<typeof makeMockResponse>) => void;
+    const res = makeMockResponse();
+    handler(undefined, res);
+
+    expect(res.body).toContain(`window.__DOCFY_SPECS__ = ${JSON.stringify(specs)};`);
+  });
 });
 
 describe('DocfyUiModule.setup() — Fastify', () => {
