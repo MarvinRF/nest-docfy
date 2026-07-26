@@ -1,0 +1,54 @@
+name: PR Check
+
+# Dogfoods the CLI's own check/coverage gates against examples/basic-nest-app
+# on every PR, posting (and updating, not spamming) a single summary comment.
+# This is the "bot de PR" step of the governance roadmap block — scoped to
+# current-state reporting only (no coverage delta vs. main yet, that needs
+# baseline caching across runs; see the roadmap notes).
+on:
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  docfy-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22.x
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm run build
+
+      - name: Run check
+        run: node dist/cli/index.js check --root examples/basic-nest-app --json > check.json || true
+
+      - name: Run coverage
+        run: node dist/cli/index.js coverage --root examples/basic-nest-app --json --min 80 > coverage.json || true
+
+      - name: Comment on PR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          CHECK_JSON_PATH: check.json
+          COVERAGE_JSON_PATH: coverage.json
+        run: node .github/scripts/pr-comment.mjs
+
+      - name: Fail the job if check or coverage did not pass
+        run: |
+          node -e "
+            const check = require('./check.json');
+            const coverage = require('./coverage.json');
+            if (!check.passed || !coverage.passed) {
+              console.error('check.passed:', check.passed, '/ coverage.passed:', coverage.passed);
+              process.exit(1);
+            }
+          "
