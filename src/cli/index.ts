@@ -228,8 +228,10 @@ program
   .option('--tsconfig <path>', 'Path to tsconfig.json (auto-detected if omitted)')
   .option('--pattern <glob>', 'Glob pattern to find controllers', '**/*.controller.ts')
   .option('--format <format>', 'Docs file format to look for: ts or js', 'ts')
+  .option('--json', 'Output a single machine-readable JSON object instead of formatted text', false)
   .option('--quiet', 'Suppress all output except errors', false)
   .action(async (rawOpts: Record<string, unknown>) => {
+    const json = Boolean(rawOpts.json);
     try {
       const options = parseAndValidateOptions({
         ...rawOpts,
@@ -238,12 +240,14 @@ program
         out: undefined,
         watch: false,
       } as Parameters<typeof parseAndValidateOptions>[0]);
-      setQuiet(options.quiet);
+      setQuiet(json || options.quiet);
 
-      header('nestjs-docfy check');
-      log('info', `Root: ${options.root}`);
-      log('info', `Pattern: ${options.pattern}`);
-      log('info', `Format: ${options.format}`);
+      if (!json) {
+        header('nestjs-docfy check');
+        log('info', `Root: ${options.root}`);
+        log('info', `Pattern: ${options.pattern}`);
+        log('info', `Format: ${options.format}`);
+      }
 
       const context = detectProject(options.root, options.tsconfig);
       const scanResult = scanAllApps(
@@ -253,17 +257,35 @@ program
         options.format,
       );
 
-      for (const err of scanResult.errors) {
-        log('error', `${err.file}: ${err.message}`);
+      if (!json) {
+        for (const err of scanResult.errors) {
+          log('error', `${err.file}: ${err.message}`);
+        }
       }
 
       if (scanResult.controllers.length === 0) {
-        log('warn', 'No controllers found matching the pattern.');
+        if (json) {
+          process.stdout.write(`${JSON.stringify({ controllersChecked: 0, issues: [], passed: true })}\n`);
+        } else {
+          log('warn', 'No controllers found matching the pattern.');
+        }
         process.exit(CliExitCode.Ok);
         return;
       }
 
       const issues = checkControllers(scanResult.controllers, options.format);
+
+      if (json) {
+        process.stdout.write(
+          `${JSON.stringify({
+            controllersChecked: scanResult.controllers.length,
+            issues,
+            passed: issues.length === 0,
+          })}\n`,
+        );
+        process.exit(issues.length === 0 ? CliExitCode.Ok : CliExitCode.PartialError);
+        return;
+      }
 
       if (issues.length === 0) {
         log('success', `All ${scanResult.controllers.length} controller(s) are fully documented.`);
@@ -283,6 +305,10 @@ program
       process.stderr.write(`\n${pc.red(`✖ ${issues.length} controller(s) out of sync.`)}\n\n`);
       process.exit(CliExitCode.PartialError);
     } catch (err) {
+      if (json && err instanceof CliError) {
+        process.stdout.write(`${JSON.stringify({ error: err.message })}\n`);
+        process.exit(err.exitCode);
+      }
       if (err instanceof CliError) {
         process.stderr.write(`\n${pc.red('✖ Error:')} ${err.message}\n\n`);
         process.exit(err.exitCode);
@@ -308,8 +334,10 @@ program
   .option('--pattern <glob>', 'Glob pattern to find controllers', '**/*.controller.ts')
   .option('--format <format>', 'Docs file format to look for: ts or js', 'ts')
   .option('--min <percent>', 'Minimum coverage percentage required — exits 1 if below')
+  .option('--json', 'Output a single machine-readable JSON object instead of formatted text', false)
   .option('--quiet', 'Suppress all output except errors', false)
   .action(async (rawOpts: Record<string, unknown>) => {
+    const json = Boolean(rawOpts.json);
     try {
       const options = parseAndValidateOptions({
         ...rawOpts,
@@ -318,7 +346,7 @@ program
         out: undefined,
         watch: false,
       } as Parameters<typeof parseAndValidateOptions>[0]);
-      setQuiet(options.quiet);
+      setQuiet(json || options.quiet);
 
       let min: number | undefined;
       if (rawOpts.min !== undefined) {
@@ -331,10 +359,12 @@ program
         }
       }
 
-      header('nestjs-docfy coverage');
-      log('info', `Root: ${options.root}`);
-      log('info', `Pattern: ${options.pattern}`);
-      log('info', `Format: ${options.format}`);
+      if (!json) {
+        header('nestjs-docfy coverage');
+        log('info', `Root: ${options.root}`);
+        log('info', `Pattern: ${options.pattern}`);
+        log('info', `Format: ${options.format}`);
+      }
 
       const context = detectProject(options.root, options.tsconfig);
       const scanResult = scanAllApps(
@@ -344,18 +374,48 @@ program
         options.format,
       );
 
-      for (const err of scanResult.errors) {
-        log('error', `${err.file}: ${err.message}`);
+      if (!json) {
+        for (const err of scanResult.errors) {
+          log('error', `${err.file}: ${err.message}`);
+        }
       }
 
       if (scanResult.controllers.length === 0) {
-        log('warn', 'No controllers found matching the pattern.');
+        if (json) {
+          process.stdout.write(
+            `${JSON.stringify({
+              totalControllers: 0,
+              totalEndpoints: 0,
+              documentedEndpoints: 0,
+              missingEndpoints: 0,
+              coveragePercent: null,
+              min: min ?? null,
+              passed: true,
+            })}\n`,
+          );
+        } else {
+          log('warn', 'No controllers found matching the pattern.');
+        }
         process.exit(CliExitCode.Ok);
         return;
       }
 
       const report = computeCoverage(scanResult.controllers, options.format);
       const pctLabel = Number.isNaN(report.coveragePercent) ? 'n/a' : `${report.coveragePercent}%`;
+      const passed = !(min !== undefined && (Number.isNaN(report.coveragePercent) || report.coveragePercent < min));
+
+      if (json) {
+        process.stdout.write(
+          `${JSON.stringify({
+            ...report,
+            coveragePercent: Number.isNaN(report.coveragePercent) ? null : report.coveragePercent,
+            min: min ?? null,
+            passed,
+          })}\n`,
+        );
+        process.exit(passed ? CliExitCode.Ok : CliExitCode.PartialError);
+        return;
+      }
 
       process.stdout.write('\n');
       process.stdout.write(`Controllers: ${report.totalControllers}\n`);
@@ -364,7 +424,7 @@ program
       process.stdout.write(`Missing docs: ${report.missingEndpoints}\n\n`);
       process.stdout.write(`Coverage: ${pctLabel}\n\n`);
 
-      if (min !== undefined && (Number.isNaN(report.coveragePercent) || report.coveragePercent < min)) {
+      if (!passed) {
         process.stderr.write(`${pc.red(`✖ Coverage ${pctLabel} is below the required minimum of ${min}%.`)}\n\n`);
         process.exit(CliExitCode.PartialError);
         return;
@@ -372,6 +432,10 @@ program
 
       process.exit(CliExitCode.Ok);
     } catch (err) {
+      if (json && err instanceof CliError) {
+        process.stdout.write(`${JSON.stringify({ error: err.message })}\n`);
+        process.exit(err.exitCode);
+      }
       if (err instanceof CliError) {
         process.stderr.write(`\n${pc.red('✖ Error:')} ${err.message}\n\n`);
         process.exit(err.exitCode);

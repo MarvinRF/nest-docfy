@@ -31,6 +31,26 @@ function run(args: string, cwd?: string): { stdout: string; stderr: string; code
   }
 }
 
+/**
+ * Waits for `filePath` to become visible to fs.existsSync in *this*
+ * process. Immediately after `generate` writes a file in a just-spawned
+ * child process, a fresh read from a different process occasionally
+ * doesn't see it yet on this environment's filesystem — a real,
+ * pre-existing timing quirk (confirmed via manual reproduction, unrelated
+ * to nestjs-docfy's own synchronous fs.writeFileSync usage), not
+ * something worth working around in the CLI itself. This only exists to
+ * keep tests that immediately follow a `generate` with a `check`/
+ * `coverage` call deterministic.
+ */
+function waitForFile(filePath: string, timeoutMs = 1000): void {
+  const deadline = Date.now() + timeoutMs;
+  const sync = new Int32Array(new SharedArrayBuffer(4));
+  while (!fs.existsSync(filePath)) {
+    if (Date.now() > deadline) return;
+    Atomics.wait(sync, 0, 0, 10);
+  }
+}
+
 function findDocs(dir: string): string[] {
   const result: string[] = [];
   function walk(d: string): void {
@@ -127,6 +147,58 @@ describe('E2E — simple project', () => {
     const { stdout, code } = run(`generate --root "${ROOT}" --quiet`);
     expect(code).toBe(0);
     expect(stdout.trim()).toBe('');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// check --json / coverage --json
+// A dedicated, single-controller fixture (not `scan`, which deliberately
+// has a two-controllers-sharing-one-docs-file edge case that makes
+// "fully documented" a fragile thing to assert against).
+// ---------------------------------------------------------------------------
+describe('E2E — check/coverage --json', () => {
+  const ROOT = fix('json-output');
+
+  afterEach(() => cleanup(ROOT));
+
+  it('check --json prints a single valid JSON object and passes once docs are generated', () => {
+    run(`generate --root "${ROOT}"`);
+    waitForFile(path.join(ROOT, 'src/items.controller.docs.ts'));
+    const { code, stdout } = run(`check --root "${ROOT}" --json`);
+    expect(code).toBe(0);
+    const parsed = JSON.parse(stdout.trim());
+    expect(parsed).toMatchObject({ issues: [], passed: true, controllersChecked: 1 });
+  });
+
+  it('check --json reports issues and exits non-zero when docs are missing', () => {
+    const { code, stdout } = run(`check --root "${ROOT}" --json`);
+    expect(code).not.toBe(0);
+    const parsed = JSON.parse(stdout.trim());
+    expect(parsed.passed).toBe(false);
+    expect(parsed.issues).toHaveLength(1);
+    expect(parsed.issues[0]).toMatchObject({ controllerClass: 'ItemsController', kind: 'missing-file' });
+  });
+
+  it('coverage --json prints a single valid JSON object with the coverage report', () => {
+    run(`generate --root "${ROOT}"`);
+    waitForFile(path.join(ROOT, 'src/items.controller.docs.ts'));
+    const { code, stdout } = run(`coverage --root "${ROOT}" --json`);
+    expect(code).toBe(0);
+    const parsed = JSON.parse(stdout.trim());
+    expect(parsed).toMatchObject({
+      passed: true,
+      min: null,
+      totalEndpoints: 2,
+      documentedEndpoints: 2,
+      coveragePercent: 100,
+    });
+  });
+
+  it('coverage --json --min fails and reports passed:false when below threshold', () => {
+    const { code, stdout } = run(`coverage --root "${ROOT}" --json --min 50`);
+    expect(code).not.toBe(0);
+    const parsed = JSON.parse(stdout.trim());
+    expect(parsed).toMatchObject({ passed: false, min: 50, coveragePercent: 0 });
   });
 });
 
