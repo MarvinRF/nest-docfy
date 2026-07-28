@@ -293,6 +293,41 @@ function typeToSchemaProperty(type: Type, depth: number): SchemaProperty {
   }
 }
 
+/**
+ * Builds an InlineSchema straight from a class's declared TS property types,
+ * the same type-driven walk `buildSchemaFromInterface` does — no
+ * class-validator decorators required. Used as a fallback for response
+ * types only (see `resolveNamedType`'s `forResponse` param): response-only
+ * entities are never validated, so they typically carry zero
+ * class-validator decorators, and `buildSchemaFromClass` alone would leave
+ * them as a dangling `$ref` with no matching `components.schemas` entry
+ * (nothing in this project's pipeline registers them with `@nestjs/swagger`
+ * otherwise).
+ */
+function buildSchemaFromClassProperties(cls: ClassDeclaration, depth: number): InlineSchema | null {
+  const properties: Record<string, SchemaProperty> = {};
+  const required: string[] = [];
+  let foundAny = false;
+
+  try {
+    for (const prop of cls.getProperties()) {
+      try {
+        const name = prop.getName();
+        if (!IDENTIFIER_RE.test(name)) continue;
+        properties[name] = typeToSchemaProperty(prop.getType(), depth);
+        foundAny = true;
+        if (!prop.hasQuestionToken()) required.push(name);
+      } catch {
+        // skip unresolvable property
+      }
+    }
+  } catch {
+    return null;
+  }
+
+  return foundAny ? { properties, required } : null;
+}
+
 function buildSchemaFromInterface(iface: InterfaceDeclaration, depth: number): InlineSchema {
   const properties: Record<string, SchemaProperty> = {};
   const required: string[] = [];
@@ -484,15 +519,15 @@ function buildSchemaFromClass(cls: ClassDeclaration): InlineSchema | null {
  * flows through `generate` exactly like today's unresolvable-type case,
  * with zero changes needed there.
  */
-function resolveUnionOfNamedTypes(type: Type, isArray: boolean): ResponseTypeInfo | null {
+function resolveUnionOfNamedTypes(type: Type, isArray: boolean, forResponse: boolean): ResponseTypeInfo | null {
   const branches = type.getUnionTypes().filter((t) => !t.isNull() && !t.isUndefined());
   if (branches.length < 2) {
-    return branches.length === 1 ? resolveNamedType(branches[0], isArray) : null;
+    return branches.length === 1 ? resolveNamedType(branches[0], isArray, forResponse) : null;
   }
 
   const members: ResponseTypeInfo[] = [];
   for (const branch of branches) {
-    const resolved = resolveNamedType(branch, false);
+    const resolved = resolveNamedType(branch, false, forResponse);
     if (!resolved) return null;
     members.push(resolved);
   }
@@ -510,10 +545,18 @@ function resolveUnionOfNamedTypes(type: Type, isArray: boolean): ResponseTypeInf
  * Resolves a named DTO/class type from a ts-morph Type.
  * Returns null for primitives, anonymous objects, intersections, node_modules, .d.ts.
  * Unions are delegated to `resolveUnionOfNamedTypes` instead of bailing.
+ *
+ * `forResponse` enables the plain-TS-type schema fallback
+ * (`buildSchemaFromClassProperties`) for classes with no class-validator
+ * decorators. It's only set for return-type resolution, not `@Body()`
+ * params — a request DTO's inferred schema is meant to reflect only what's
+ * actually validated (see `create-user.dto.ts`), while a response entity
+ * has no validation concept at all, so the full type is the only sensible
+ * schema.
  */
-function resolveNamedType(type: Type, isArray: boolean): ResponseTypeInfo | null {
+function resolveNamedType(type: Type, isArray: boolean, forResponse = false): ResponseTypeInfo | null {
   try {
-    if (type.isUnion()) return resolveUnionOfNamedTypes(type, isArray);
+    if (type.isUnion()) return resolveUnionOfNamedTypes(type, isArray, forResponse);
     if (type.isString() || type.isNumber() || type.isBoolean()) return null;
     if (type.isUndefined() || type.isNull() || type.isVoid()) return null;
     if (type.isAnonymous()) return null;
@@ -540,10 +583,16 @@ function resolveNamedType(type: Type, isArray: boolean): ResponseTypeInfo | null
 
     const inlineSchema = isInterface ? buildSchemaFromInterface(declarations[0] as InterfaceDeclaration, 0) : undefined;
 
-    const classSchema =
+    const classDeclaration =
       !isInterface && declarations[0].getKind() === SyntaxKind.ClassDeclaration
-        ? (buildSchemaFromClass(declarations[0] as ClassDeclaration) ?? undefined)
+        ? (declarations[0] as ClassDeclaration)
         : undefined;
+    const classSchema = classDeclaration
+      ? (buildSchemaFromClass(classDeclaration) ??
+        (forResponse && !classHasApiProperty(classDeclaration)
+          ? (buildSchemaFromClassProperties(classDeclaration, 0) ?? undefined)
+          : undefined))
+      : undefined;
 
     return { name, absolutePath, isArray, isInterface, inlineSchema, classSchema };
   } catch {
@@ -629,7 +678,7 @@ function resolveResponseType(method: MethodDeclaration): ResponseTypeInfo | null
       elementType = inner.getArrayElementTypeOrThrow();
     }
 
-    return resolveNamedType(elementType, isArray);
+    return resolveNamedType(elementType, isArray, true);
   } catch {
     return null;
   }

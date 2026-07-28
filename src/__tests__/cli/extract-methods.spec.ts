@@ -128,6 +128,92 @@ describe('extractMethods() — union return types and @Body() payloads', () => {
   });
 });
 
+describe('extractMethods() — class-based response entities with no class-validator decorators', () => {
+  it('infers a full type-driven schema for a response entity class with zero decorators', () => {
+    const methods = extractFromSource(
+      `
+      export enum UserRole { Member = 'member', Admin = 'admin' }
+
+      export class UserEntity {
+        id: string;
+        name: string;
+        role: UserRole;
+      }
+
+      @Controller('users')
+      export class UsersController {
+        @Get()
+        findAll(): UserEntity[] {
+          return null as any;
+        }
+      }
+      `,
+      'UsersController',
+    );
+
+    const responseType = methods[0].responseType;
+    expect(responseType).not.toBeNull();
+    expect(responseType!.isArray).toBe(true);
+    expect(responseType!.classSchema).toEqual({
+      properties: {
+        id: { type: 'string' },
+        name: { type: 'string' },
+        role: { type: 'string', enum: ['member', 'admin'] },
+      },
+      required: ['id', 'name', 'role'],
+    });
+  });
+
+  it('does not apply the type-driven fallback to a @Body() DTO with no class-validator decorators', () => {
+    const methods = extractFromSource(
+      `
+      export class CreateUserDto {
+        name: string;
+        role: string;
+      }
+
+      @Controller('users')
+      export class UsersController {
+        @Post()
+        create(@Body() dto: CreateUserDto): void {}
+      }
+      `,
+      'UsersController',
+    );
+
+    const bodyType = methods[0].params[0].bodyType;
+    expect(bodyType).not.toBeNull();
+    expect(bodyType!.classSchema).toBeUndefined();
+  });
+
+  it('does not override a response entity that already has @ApiProperty decorators', () => {
+    const methods = extractFromSource(
+      `
+      function ApiProperty() { return (target: any, key?: any) => {}; }
+
+      export class UserEntity {
+        @ApiProperty()
+        id: string;
+        name: string;
+      }
+
+      @Controller('users')
+      export class UsersController {
+        @Get(':id')
+        findOne(): UserEntity {
+          return null as any;
+        }
+      }
+      `,
+      'UsersController',
+    );
+
+    const responseType = methods[0].responseType;
+    expect(responseType).not.toBeNull();
+    expect(responseType!.classSchema).toBeUndefined();
+  });
+});
+
 describe('extractMethods() — literal union properties on interface DTOs', () => {
   it('collapses a string-literal union property to a string enum', () => {
     const methods = extractFromSource(
