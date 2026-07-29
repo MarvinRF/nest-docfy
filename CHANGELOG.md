@@ -1,3 +1,10 @@
+# [0.7.0](https://github.com/MarvinRF/nest-docfy/compare/v0.6.3...v0.7.0) (2026-07-29)
+
+
+### Features
+
+* **cli:** add export command — generate the OpenAPI document without .listen() ([cc666f0](https://github.com/MarvinRF/nest-docfy/commit/cc666f0101c70c4b1010621246127b07cb7ad5aa))
+
 ## [0.6.3](https://github.com/MarvinRF/nest-docfy/compare/v0.6.2...v0.6.3) (2026-07-29)
 
 
