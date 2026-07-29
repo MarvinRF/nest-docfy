@@ -1,3 +1,10 @@
+## [0.6.3](https://github.com/MarvinRF/nest-docfy/compare/v0.6.2...v0.6.3) (2026-07-29)
+
+
+### Bug Fixes
+
+* collapse boolean literal unions to a plain boolean schema ([e9aa6a2](https://github.com/MarvinRF/nest-docfy/commit/e9aa6a281ffa31b0a33f3ad64c73b222e14b6a7d))
+
 ## [0.6.2](https://github.com/MarvinRF/nest-docfy/compare/v0.6.1...v0.6.2) (2026-07-29)
 
 
