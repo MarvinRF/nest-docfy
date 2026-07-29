@@ -1,12 +1,8 @@
 {
   "mcpServers": {
     "docfy": {
-      "command": "node",
-      "args": [
-        "../../../docfy-mcp/dist/cli.js",
-        "--url",
-        "http://localhost:3000/docs-json"
-      ]
+      "command": "npx",
+      "args": ["-y", "docfy-mcp", "--url", "http://localhost:3000/docs-json"]
     }
   }
 }
