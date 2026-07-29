@@ -233,6 +233,29 @@ describe('extractMethods() — literal union properties on interface DTOs', () =
     expect(schema.properties.status).toEqual({ type: 'string', enum: ['active', 'inactive', 'banned'] });
   });
 
+  it('collapses a plain boolean property to { type: "boolean" }, not a redundant oneOf', () => {
+    // Regression: TS represents the `boolean` keyword type as a union of the
+    // literal types `true | false` internally — ts-morph's `Type.isUnion()`
+    // returns true for a plain `success: boolean` field. Without collapsing
+    // both literal branches, this produced `oneOf: [{type:'boolean'},
+    // {type:'boolean'}]` instead of a plain `{ type: 'boolean' }`.
+    const methods = extractFromSource(
+      `
+      export interface LoginResponseDTO { success: boolean; }
+
+      @Controller('users')
+      export class UsersController {
+        @Get()
+        findAll(): Promise<LoginResponseDTO> { return null as any; }
+      }
+      `,
+      'UsersController',
+    );
+
+    const schema = methods[0].responseType!.inlineSchema!;
+    expect(schema.properties.success).toEqual({ type: 'boolean' });
+  });
+
   it('collapses a numeric-literal union property to an integer enum', () => {
     const methods = extractFromSource(
       `

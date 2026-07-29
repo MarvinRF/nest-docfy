@@ -232,6 +232,14 @@ function typeToSchemaProperty(type: Type, depth: number): SchemaProperty {
           enum: values,
           ...(isNullable ? { nullable: true } : {}),
         };
+      } else if (nonNull.every((t) => t.isBooleanLiteral())) {
+        // TS represents the plain `boolean` keyword type as a union of the
+        // literal types `true | false` in some inference contexts (e.g. a
+        // structurally-inferred field, as opposed to an explicit `: boolean`
+        // annotation) — without this branch, both literal members fall
+        // through to the generic oneOf below and produce two identical
+        // `{ type: 'boolean' }` entries instead of one plain boolean.
+        return { type: 'boolean', ...(isNullable ? { nullable: true } : {}) };
       } else {
         // Heterogeneous union (mixed primitive kinds, or ≥2 object/interface types) —
         // represent as oneOf rather than silently dropping the type info.
