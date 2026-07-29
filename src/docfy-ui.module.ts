@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as express from 'express';
+import { buildAllowedOrigins, handleProxyRequest, ProxyResponderLike, readJsonBody } from './proxy-handler';
 
 /**
  * Minimal structural shape of what `DocfyUiModule.setup()` needs from a
@@ -16,6 +17,7 @@ export interface DocfyUiHttpAdapter {
   // since a fixed-return-type method can't satisfy an arbitrarily-instantiable generic one.
   getInstance(): unknown;
   get(path: string, handler: (req: unknown, res: unknown) => unknown): unknown;
+  post(path: string, handler: (req: unknown, res: unknown) => unknown): unknown;
 }
 
 /**
@@ -64,6 +66,21 @@ export interface DocfyUiSetupOptions {
    * a single spec, no switcher rendered.
    */
   specs?: { name: string; url: string }[];
+
+  /**
+   * Enables the "Try it out" server-side proxy: docfy-ui's browser calls a same-origin
+   * route on this app instead of the target API directly, sidestepping CORS entirely.
+   * Requires explicit opt-in — pass the same `OpenAPIObject` you already have from
+   * `SwaggerModule.createDocument()`. Its `servers[]` becomes the proxy's allowlist;
+   * there is deliberately no implicit "same origin as this request" fallback (that would
+   * be derived from client-controlled headers, an SSRF risk — see docfy-ui.module.ts).
+   * Only absolute server URLs count. Omit entirely to leave the proxy disabled (no new
+   * route registered at all).
+   */
+  openApiDocument?: { servers?: { url: string }[] };
+
+  /** Extra allowed origins for the proxy, beyond what `openApiDocument.servers` declares. */
+  additionalProxyOrigins?: string[];
 }
 
 function loadFastifyStatic(): unknown {
@@ -121,17 +138,41 @@ export class DocfyUiModule {
       });
     }
 
+    const basePath = mountPath === '/' ? '/' : `${mountPath.replace(/\/+$/, '')}/`;
+
+    let proxyPath: string | undefined;
+    if (options.openApiDocument || options.additionalProxyOrigins) {
+      const allowedOrigins = buildAllowedOrigins(options.openApiDocument?.servers, options.additionalProxyOrigins);
+      if (allowedOrigins.size === 0) {
+        console.warn(
+          'DocfyUiModule.setup(): "Try it out" proxy enabled but no absolute server URLs were found — ' +
+            'every request will be rejected. Declare an absolute URL in your OpenAPI "servers" array ' +
+            '(or pass `additionalProxyOrigins`) to allow it.',
+        );
+      }
+      proxyPath = `${basePath}__docfy_proxy`.replace(/\/+/g, '/');
+      httpAdapter.post(proxyPath, (req: any, res: any) => {
+        readJsonBody(req)
+          .then((body) => handleProxyRequest(body, allowedOrigins, res as ProxyResponderLike))
+          .catch((err) => {
+            console.error('DocfyUiModule: "Try it out" proxy handler failed unexpectedly:', err);
+          });
+      });
+    }
+
     const indexHtmlPath = require.resolve('docfy-ui/dist/index.html');
     const uiDir = path.dirname(indexHtmlPath);
-    const basePath = mountPath === '/' ? '/' : `${mountPath.replace(/\/+$/, '')}/`;
     const specsScript = options.specs
       ? `\n    <script>window.__DOCFY_SPECS__ = ${JSON.stringify(options.specs)};</script>`
+      : '';
+    const proxyScript = proxyPath
+      ? `\n    <script>window.__DOCFY_PROXY_PATH__ = ${JSON.stringify(proxyPath)};</script>`
       : '';
     const indexHtml = fs
       .readFileSync(indexHtmlPath, 'utf8')
       .replace(
         '<head>',
-        `<head>\n    <base href="${basePath}" />\n    <script>window.__DOCFY_BASE_PATH__ = ${JSON.stringify(basePath)};</script>${specsScript}`,
+        `<head>\n    <base href="${basePath}" />\n    <script>window.__DOCFY_BASE_PATH__ = ${JSON.stringify(basePath)};</script>${specsScript}${proxyScript}`,
       );
 
     if (isFastify) {

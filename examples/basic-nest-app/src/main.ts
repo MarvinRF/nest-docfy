@@ -1,7 +1,7 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
-import { applyDocfyMetadata } from 'nestjs-docfy';
+import { applyDocfyMetadata, DocfyUiModule } from 'nestjs-docfy';
 import { AppModule } from './app.module';
 
 async function bootstrap() {
@@ -11,6 +11,7 @@ async function bootstrap() {
     .setTitle('basic-nest-app')
     .setDescription('nestjs-docfy demo — see the README for the three ways this app gets fully patched Swagger docs')
     .setVersion('1.0')
+    .addServer('http://localhost:3000')
     .build();
 
   let document = SwaggerModule.createDocument(app, config);
@@ -27,9 +28,12 @@ async function bootstrap() {
   document = applyDocfyMetadata(document);
 
   SwaggerModule.setup('docs', app, document);
+  DocfyUiModule.setup('/docs-ui', app, { openApiDocument: document });
 
   await app.listen(3000);
   // eslint-disable-next-line no-console
   console.log('Swagger UI: http://localhost:3000/docs');
+  // eslint-disable-next-line no-console
+  console.log('docfy-ui (Try it out): http://localhost:3000/docs-ui');
 }
 bootstrap();

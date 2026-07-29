@@ -25,6 +25,7 @@ function makeRecordingApp(type: 'express' | 'fastify' = 'express') {
   const httpAdapter = {
     getType: () => type,
     get: (...args: unknown[]) => calls.push({ args }),
+    post: (...args: unknown[]) => calls.push({ args }),
     getInstance: () => fakeInstance,
   };
 
@@ -40,6 +41,7 @@ function makeMockResponse() {
   const res = {
     headers: {} as Record<string, string>,
     body: undefined as string | undefined,
+    statusCode: undefined as number | undefined,
     setHeader(name: string, value: string) {
       res.headers[name] = value;
       return res;
@@ -54,6 +56,14 @@ function makeMockResponse() {
     },
     type(contentType: string) {
       res.headers['Content-Type'] = contentType;
+      return res;
+    },
+    status(code: number) {
+      res.statusCode = code;
+      return res;
+    },
+    header(name: string, value: string) {
+      res.headers[name] = value;
       return res;
     },
   };
@@ -167,6 +177,53 @@ describe('DocfyUiModule.setup() — Express', () => {
     handler(undefined, res);
 
     expect(res.body).toContain(`window.__DOCFY_SPECS__ = ${JSON.stringify(specs)};`);
+  });
+
+  it('does not register a proxy route or inject window.__DOCFY_PROXY_PATH__ when neither proxy option is given', () => {
+    const { app, calls } = makeRecordingApp();
+    DocfyUiModule.setup('/docs', app);
+
+    expect(calls.some((c) => c.args[0] === '/docs/__docfy_proxy')).toBe(false);
+
+    const fallback = calls.filter((c) => c.args[0] === '/docs').at(-1)!;
+    const handler = fallback.args[1] as (req: unknown, res: ReturnType<typeof makeMockResponse>) => void;
+    const res = makeMockResponse();
+    handler(undefined, res);
+    expect(res.body).not.toContain('__DOCFY_PROXY_PATH__');
+  });
+
+  it('registers a POST proxy route scoped under mountPath and injects window.__DOCFY_PROXY_PATH__ when openApiDocument is given', () => {
+    const { app, calls } = makeRecordingApp();
+    DocfyUiModule.setup('/docs', app, { openApiDocument: { servers: [{ url: 'https://api.example.com' }] } });
+
+    const proxyCall = calls.find((c) => c.args[0] === '/docs/__docfy_proxy');
+    expect(proxyCall).toBeDefined();
+
+    const fallback = calls.filter((c) => c.args[0] === '/docs').at(-1)!;
+    const handler = fallback.args[1] as (req: unknown, res: ReturnType<typeof makeMockResponse>) => void;
+    const res = makeMockResponse();
+    handler(undefined, res);
+    expect(res.body).toContain('window.__DOCFY_PROXY_PATH__ = "/docs/__docfy_proxy";');
+  });
+
+  it('also registers the proxy route when only additionalProxyOrigins is given (no openApiDocument)', () => {
+    const { app, calls } = makeRecordingApp();
+    DocfyUiModule.setup('/docs', app, { additionalProxyOrigins: ['https://api.example.com'] });
+
+    expect(calls.some((c) => c.args[0] === '/docs/__docfy_proxy')).toBe(true);
+  });
+
+  it('the registered proxy handler rejects a disallowed origin with a 403 and X-Docfy-Proxy-Error header', async () => {
+    const { app, calls } = makeRecordingApp();
+    DocfyUiModule.setup('/docs', app, { openApiDocument: { servers: [{ url: 'https://api.example.com' }] } });
+
+    const proxyCall = calls.find((c) => c.args[0] === '/docs/__docfy_proxy')!;
+    const handler = proxyCall.args[1] as (req: unknown, res: ReturnType<typeof makeMockResponse>) => unknown;
+    const res = makeMockResponse();
+    await handler({ body: { method: 'GET', url: 'https://internal.local/admin' } }, res);
+
+    expect(res.statusCode).toBe(403);
+    expect(res.headers['x-docfy-proxy-error']).toBe('origin_not_allowed');
   });
 });
 
