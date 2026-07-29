@@ -1,3 +1,10 @@
+## [0.6.2](https://github.com/MarvinRF/nest-docfy/compare/v0.6.1...v0.6.2) (2026-07-29)
+
+
+### Bug Fixes
+
+* bump pinned docfy-ui dependency to ^0.3.0 ([ad2c188](https://github.com/MarvinRF/nest-docfy/commit/ad2c188595250503c0dfed18075469a71794bbcd))
+
 ## [0.6.1](https://github.com/MarvinRF/nest-docfy/compare/v0.6.0...v0.6.1) (2026-07-29)
 
 
