@@ -469,6 +469,41 @@ npx nestjs-docfy patch-spec --spec dist/openapi.json --out dist/openapi.json
 
 **What this does _not_ do** (yet, since this command is intentionally scoped, not a full reimplementation of `@nestjs/swagger`'s decorator semantics): `anyOf` (no TS construct maps onto "any of" the way a union type naturally maps onto `oneOf`), `links`/`callbacks` (`@nestjs/swagger` itself has no decorator option for either, so there's nothing in a `.docs.ts` file to read), and any decorator argument that isn't a literal (a variable, a function call, a spread) are left alone rather than guessed at. It's better to leave a field as the base document already had it than patch in something wrong. A union return type or `@Body()` payload only becomes a `oneOf` when _every_ branch resolves to a named DTO/entity. A partial guess is avoided by leaving the field alone entirely (falling back to no schema, same as an unresolvable type) if even one branch doesn't resolve. Routes a docs file documents that don't exist in `--spec` are reported as warnings, not silently dropped or errored on.
 
+## CLI: export
+
+Boots the project's **own** Nest app and writes the OpenAPI document it produces, without binding a port. Unlike `patch-spec`, this builds the base document too (via a real `SwaggerModule.createDocument()`) — it doesn't need one to already exist.
+
+The one thing `SwaggerModule.createDocument()` structurally needs is a fully-initialized Nest app — its DI container has to have resolved every provider before route/DTO metadata exists to introspect. That does **not** require `.listen()` (no port bound), and in practice usually doesn't require live infrastructure either: most `TypeOrmModule`/`ioredis`/`kafkajs`-style clients connect lazily rather than blocking bootstrap, so `export` tends to work with the database, Redis, Kafka, etc. all stopped. A provider with a genuinely eager, hard-failing connection in its constructor or `onModuleInit` won't benefit from this — nothing here can change how your own providers connect.
+
+You provide a small **entry file** — the same handful of lines your `main.ts` already has, minus `.listen()` and anything unrelated to the document itself:
+
+```ts
+// docfy-export.ts
+import { NestFactory } from '@nestjs/core';
+import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
+import { AppModule } from './app.module';
+
+export default async function () {
+  const app = await NestFactory.create(AppModule, { logger: false });
+  const config = new DocumentBuilder().setTitle('My API').setVersion('1.0.0').build();
+  const document = SwaggerModule.createDocument(app, config);
+  return { app, document }; // `app` gets closed for you afterward
+}
+```
+
+```bash
+npx nestjs-docfy export --entry docfy-export.ts --out openapi.json
+```
+
+| Option           | Default      | Description                                                        |
+| ---------------- | ------------ | -------------------------------------------------------------------- |
+| `--entry <path>` | _(required)_ | `.ts`/`.js` file whose default export returns `{ app, document }`  |
+| `--out <path>`   | stdout       | Where to write the document                                        |
+| `--root <path>`  | `.`          | Project root — where `ts-node`/`tsconfig-paths` are resolved from  |
+| `--quiet`        | `false`      | Suppress informational output (errors still go to stderr)          |
+
+A `.ts` entry file needs `ts-node` as a devDependency of your project (for `tsconfig-paths` support too, if your project uses path aliases like `@app/common`). Informational output always goes to stderr, never stdout — safe to pipe: `npx nestjs-docfy export --entry docfy-export.ts > openapi.json`.
+
 ## CLI: generate-client
 
 Generates a typed TypeScript client from an OpenAPI document, a thin wrapper over [`openapi-typescript`](https://openapi-ts.dev) (types) and [`openapi-fetch`](https://openapi-ts.dev/openapi-fetch) (the runtime client), not a from-scratch code generator.

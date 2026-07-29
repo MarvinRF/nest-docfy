@@ -15,6 +15,7 @@ import { checkControllers } from './check';
 import { computeCoverage } from './coverage';
 import { lintControllers } from './lint';
 import { computePatchedDocument } from './patch-spec';
+import { exportSpec } from './export-spec';
 import { readSpecSource } from './read-spec-source';
 import { buildClientFiles } from './generate-client';
 import type { OpenApiDocument } from './merge-spec-patch';
@@ -616,6 +617,55 @@ program
         process.stdout.write(`${output}\n`);
       }
 
+      process.exit(CliExitCode.Ok);
+    } catch (err) {
+      if (err instanceof CliError) {
+        process.stderr.write(`\n${pc.red('✖ Error:')} ${err.message}\n\n`);
+        process.exit(err.exitCode);
+      }
+      if (err instanceof Error) {
+        process.stderr.write(`\n${pc.red('✖ Error:')} ${err.message}\n\n`);
+      } else {
+        process.stderr.write(`\n${pc.red('✖ Unknown error')}\n\n`);
+      }
+      process.exit(CliExitCode.Fatal);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// export command
+// ---------------------------------------------------------------------------
+
+program
+  .command('export')
+  .description(
+    'Boot the project\'s own Nest app (via a small entry file you provide) and write the ' +
+      'OpenAPI document it produces, without binding a port. Unlike patch-spec, this generates ' +
+      'the base document too (not just patches an existing one) — see README for the entry file contract.',
+  )
+  .requiredOption('--entry <path>', 'Path to a .ts/.js file whose default export boots the app and returns { app, document }')
+  .option('--out <path>', 'Where to write the document (default: stdout)')
+  .option('--root <path>', 'Project root directory', '.')
+  .option('--quiet', 'Suppress all output except errors', false)
+  .action((rawOpts: { entry: string; out?: string; root: string; quiet: boolean }) => {
+    // Informational messages always go to stderr here, regardless of
+    // --quiet/--out: unlike the other commands, this one may print the
+    // document itself to stdout, and that has to stay pipeable
+    // (`nestjs-docfy export --entry x.ts > openapi.json`) without any
+    // chatter mixed in ahead of the JSON.
+    const info = (message: string) => {
+      if (!rawOpts.quiet) process.stderr.write(`  ${message}\n`);
+    };
+    try {
+      info(`Entry: ${rawOpts.entry}`);
+
+      const { document, outPath } = exportSpec({ entry: rawOpts.entry, root: rawOpts.root, out: rawOpts.out });
+
+      if (outPath) {
+        info(`Written to ${outPath}`);
+      } else {
+        process.stdout.write(`${JSON.stringify(document, null, 2)}\n`);
+      }
       process.exit(CliExitCode.Ok);
     } catch (err) {
       if (err instanceof CliError) {
