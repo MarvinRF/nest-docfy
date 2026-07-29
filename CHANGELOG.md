@@ -1,3 +1,10 @@
+# [0.8.0](https://github.com/MarvinRF/nest-docfy/compare/v0.7.0...v0.8.0) (2026-07-29)
+
+
+### Features
+
+* add a same-origin proxy for docfy-ui's "Try it out" (avoids CORS) ([988791e](https://github.com/MarvinRF/nest-docfy/commit/988791ea37db3bb95786c585b7393647a3b1b787))
+
 # [0.7.0](https://github.com/MarvinRF/nest-docfy/compare/v0.6.3...v0.7.0) (2026-07-29)
 
 
