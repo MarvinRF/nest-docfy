@@ -1,3 +1,10 @@
+## [0.6.1](https://github.com/MarvinRF/nest-docfy/compare/v0.6.0...v0.6.1) (2026-07-29)
+
+
+### Bug Fixes
+
+* infer full schema for response entities without class-validator decorators ([ad7a59d](https://github.com/MarvinRF/nest-docfy/commit/ad7a59d00ddc3c8d3e20df2f99cdd6aac2be03c0))
+
 # [0.6.0](https://github.com/MarvinRF/nest-docfy/compare/v0.5.0...v0.6.0) (2026-07-26)
 
 
