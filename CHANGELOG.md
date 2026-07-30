@@ -1,3 +1,22 @@
+# [0.10.0](https://github.com/MarvinRF/nest-docfy/compare/v0.9.1...v0.10.0) (2026-07-30)
+
+
+### Bug Fixes
+
+* **cli:** load generate-client's openapi-typescript import lazily ([06b8d2b](https://github.com/MarvinRF/nest-docfy/commit/06b8d2b1dcb2aa8373c156fa30c7a30bd6dd99e7))
+* downgrade commander to ^14.0.3 (v15 dropped CJS support) ([3ec9194](https://github.com/MarvinRF/nest-docfy/commit/3ec9194d0643249c70b85165c057abcdff320d9f))
+* exclude CHANGELOG.md from prettier ([3d75819](https://github.com/MarvinRF/nest-docfy/commit/3d75819dc637f031c6d0fb6c5b02fb33ddd99209))
+* prettier formatting drift in export command (cli/index.ts, export-entry-runner.ts) ([37c2af0](https://github.com/MarvinRF/nest-docfy/commit/37c2af0712d3f14fee70d27e02cca9fa60344dcc))
+* **test:** isolate e2e.spec.ts fixtures to fix flaky/failing CI ([3190e02](https://github.com/MarvinRF/nest-docfy/commit/3190e025d7879c64d3dc95ca24371a927e134b30))
+
+
+### Features
+
+* **ci:** add docfy-pr-check-reusable.yml for external consumers ([04ef645](https://github.com/MarvinRF/nest-docfy/commit/04ef645c65092cbaa46e63ce4df5b977cfdd3dfe))
+* **ci:** add spec-diff script for breaking-change detection ([e4ee847](https://github.com/MarvinRF/nest-docfy/commit/e4ee847217be7c4a1f4d0b4d490b747c9a9006b0))
+* **ci:** surface breaking-change spec diff in the PR comment ([94259da](https://github.com/MarvinRF/nest-docfy/commit/94259da0a778a833be7e2f5259533f4b632524e3))
+* **examples:** add docfy-export.ts entry file to basic-nest-app ([cbd113c](https://github.com/MarvinRF/nest-docfy/commit/cbd113c9edc30f60cfb21170bfb2c727c1ac3865))
+
 ## [0.9.1](https://github.com/MarvinRF/nest-docfy/compare/v0.9.0...v0.9.1) (2026-07-30)
 
 
