@@ -1,3 +1,10 @@
+## [0.9.1](https://github.com/MarvinRF/nest-docfy/compare/v0.9.0...v0.9.1) (2026-07-30)
+
+
+### Bug Fixes
+
+* **cli:** warn when docfy-ui is declared in the app's own package.json ([7c9aea8](https://github.com/MarvinRF/nest-docfy/commit/7c9aea8105420c5a064adda4580cc0c29fac0404))
+
 # [0.9.0](https://github.com/MarvinRF/nest-docfy/compare/v0.8.0...v0.9.0) (2026-07-29)
 
 
