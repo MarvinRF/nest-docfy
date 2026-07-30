@@ -12,6 +12,7 @@ import { scanAllApps } from './scan-controllers';
 import { writeAllDocs } from './writer';
 import { watchProject } from './watch';
 import { checkControllers } from './check';
+import { checkDocfyUiPin } from './docfy-ui-pin-check';
 import { computeCoverage } from './coverage';
 import { lintControllers } from './lint';
 import { computePatchedDocument } from './patch-spec';
@@ -275,17 +276,28 @@ program
       }
 
       const issues = checkControllers(scanResult.controllers, options.format);
+      const docfyUiPin = checkDocfyUiPin(options.root);
 
       if (json) {
         process.stdout.write(
           `${JSON.stringify({
             controllersChecked: scanResult.controllers.length,
             issues,
+            docfyUiPin,
             passed: issues.length === 0,
           })}\n`,
         );
         process.exit(issues.length === 0 ? CliExitCode.Ok : CliExitCode.PartialError);
         return;
+      }
+
+      if (docfyUiPin) {
+        log(
+          'warn',
+          `docfy-ui@${docfyUiPin.appDeclaredRange} is declared in your package.json, but it has no effect on ` +
+            `the UI served — nestjs-docfy vendors its own pinned copy (currently docfy-ui@${docfyUiPin.servedVersion}). ` +
+            `To get a newer UI, update nestjs-docfy itself.`,
+        );
       }
 
       if (issues.length === 0) {
