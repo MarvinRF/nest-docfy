@@ -1,3 +1,10 @@
+# [0.9.0](https://github.com/MarvinRF/nest-docfy/compare/v0.8.0...v0.9.0) (2026-07-29)
+
+
+### Documentation
+
+* document specs/openApiDocument/additionalProxyOrigins in DocfyUiModule.setup(), and bump the pinned docfy-ui dependency to ^0.5.0 ([f47fe8d](https://github.com/MarvinRF/nest-docfy/commit/f47fe8d42a4dd805d89aca0e10ee510a77cfde90))
+
 # [0.8.0](https://github.com/MarvinRF/nest-docfy/compare/v0.7.0...v0.8.0) (2026-07-29)
 
 
