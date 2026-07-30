@@ -18,7 +18,6 @@ import { lintControllers } from './lint';
 import { computePatchedDocument } from './patch-spec';
 import { exportSpec } from './export-spec';
 import { readSpecSource } from './read-spec-source';
-import { buildClientFiles } from './generate-client';
 import type { OpenApiDocument } from './merge-spec-patch';
 
 const program = new Command();
@@ -726,6 +725,11 @@ program
       const outDir = resolveAndValidate(String(rawOpts.out ?? './generated-client'), root, '--out');
       fs.mkdirSync(outDir, { recursive: true });
 
+      // Loaded lazily (not at module top-level): openapi-typescript pulls in
+      // parse-json@8, which is ESM-only — eagerly requiring it would crash
+      // *every* CLI invocation on Node <22.12 (no native require(esm)
+      // interop), not just generate-client's own.
+      const { buildClientFiles } = await import('./generate-client');
       const { schema, client } = await buildClientFiles(document);
       fs.writeFileSync(path.join(outDir, 'schema.d.ts'), schema);
       fs.writeFileSync(path.join(outDir, 'client.ts'), client);
