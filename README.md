@@ -509,6 +509,8 @@ A `.ts` entry file needs `ts-node` as a devDependency of your project (for `tsco
 
 Generates a typed TypeScript client from an OpenAPI document, a thin wrapper over [`openapi-typescript`](https://openapi-ts.dev) (types) and [`openapi-fetch`](https://openapi-ts.dev/openapi-fetch) (the runtime client), not a from-scratch code generator.
 
+> **Requires Node >=22.12.** `openapi-typescript` eagerly requires an ESM-only transitive dependency (`parse-json@8`) — this needs native `require(esm)` interop, unsupported on older Node versions. Every other command in this package works down to Node 16, per `engines` in `package.json`.
+
 ```bash
 npx nestjs-docfy generate-client --spec <path-or-url> [options]
 ```

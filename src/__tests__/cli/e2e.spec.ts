@@ -339,12 +339,19 @@ describe('E2E — security: output confinement', () => {
 // ---------------------------------------------------------------------------
 // generate-client
 // ---------------------------------------------------------------------------
-// Run as a spawned process (like every other suite here), not required
-// in-process: openapi-typescript's CJS build pulls in a chain of ESM-only
-// transitive deps (parse-json, supports-color, ...) that Jest's own
-// require() hook can't load, but a real `node dist/cli/index.js` process
-// resolves them fine — the exact same reason this file spawns everything.
-describe('E2E — generate-client', () => {
+// Skipped below Node 22.12: openapi-typescript's CJS build eagerly requires
+// parse-json@8 (ESM-only), which throws ERR_REQUIRE_ESM on any Node without
+// native require(esm) interop — a real runtime restriction, not something
+// spawning a child process (as every suite here does) works around. Every
+// other command stays lazy-loaded specifically so this doesn't take the
+// rest of the CLI down with it (see index.ts's generate-client command).
+const SUPPORTS_REQUIRE_ESM = (() => {
+  const [major, minor] = process.versions.node.split('.').map(Number);
+  return major > 22 || (major === 22 && minor >= 12);
+})();
+const describeGenerateClient = SUPPORTS_REQUIRE_ESM ? describe : describe.skip;
+
+describeGenerateClient('E2E — generate-client', () => {
   let tmpDir: string;
 
   beforeEach(() => {
