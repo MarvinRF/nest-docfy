@@ -1,6 +1,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import * as express from 'express';
+import { buildLlmsFullTxt, buildLlmsTxt, normalizeDocument } from 'docfy-core';
 import { buildAllowedOrigins, handleProxyRequest, ProxyResponderLike, readJsonBody } from './proxy-handler';
 
 /**
@@ -81,6 +82,22 @@ export interface DocfyUiSetupOptions {
 
   /** Extra allowed origins for the proxy, beyond what `openApiDocument.servers` declares. */
   additionalProxyOrigins?: string[];
+
+  /**
+   * Opt-in: serves `llms.txt` and `llms-full.txt` at the mount path (the https://llmstxt.org
+   * convention) — lets an agent discover the API's endpoints with a plain `curl`/`fetch`, no
+   * MCP server required. `llms.txt` lists one bullet per endpoint (linking to its `docfy-ui`
+   * page); `llms-full.txt` expands each into its full "Copy for AI" text, the same content
+   * `docfy-mcp`'s `get_endpoint` tool returns. Never registered unless this option is set —
+   * unlike `staticSpecPath`/`openApiDocument`, it changes nothing when omitted.
+   *
+   * Pass `true` to reuse the already-loaded `staticSpecPath` document (requires that option to
+   * also be set). Pass `{ document }` explicitly when instead relying on a live
+   * `SwaggerModule`-produced spec — the same raw `OpenAPIObject` you'd pass as
+   * `openApiDocument`. `title`/`description` default to the spec's own
+   * `info.title`/`info.description`.
+   */
+  llmsTxt?: true | { document: Record<string, unknown>; title?: string; description?: string };
 }
 
 function loadFastifyStatic(): unknown {
@@ -130,15 +147,63 @@ export class DocfyUiModule {
     const httpAdapter = app.getHttpAdapter();
     const isFastify = httpAdapter.getType() === 'fastify';
 
+    let staticSpecJson: string | undefined;
     if (options.staticSpecPath) {
-      const specJson = fs.readFileSync(options.staticSpecPath, 'utf8');
+      staticSpecJson = fs.readFileSync(options.staticSpecPath, 'utf8');
       httpAdapter.get('/api-json', (_req: unknown, res: any) => {
         res.type('application/json');
-        res.send(specJson);
+        res.send(staticSpecJson);
       });
     }
 
     const basePath = mountPath === '/' ? '/' : `${mountPath.replace(/\/+$/, '')}/`;
+
+    // Parsed eagerly (not deferred into the route handler) so a malformed static spec fails
+    // fast at boot, same as any other startup misconfiguration — not silently on first request.
+    const llmsDocumentSource =
+      options.llmsTxt && options.llmsTxt !== true
+        ? options.llmsTxt.document
+        : options.llmsTxt && staticSpecJson
+          ? JSON.parse(staticSpecJson)
+          : undefined;
+
+    if (options.llmsTxt && !llmsDocumentSource) {
+      console.warn(
+        'DocfyUiModule.setup(): `llmsTxt: true` requires `staticSpecPath` to also be set (or pass ' +
+          '`llmsTxt: { document }` explicitly) — no llms.txt routes were registered.',
+      );
+    }
+
+    if (llmsDocumentSource) {
+      const documentModelPromise = normalizeDocument(llmsDocumentSource);
+      const llmsTxtOptions =
+        options.llmsTxt && options.llmsTxt !== true
+          ? { title: options.llmsTxt.title, description: options.llmsTxt.description }
+          : {};
+      const docsBaseUrl = basePath;
+
+      // Handlers return their promise chain (harmless — Express/Fastify ignore a handler's
+      // return value) so tests can `await` completion instead of racing microtask ordering.
+      httpAdapter.get(`${basePath}llms.txt`.replace(/\/+/g, '/'), (_req: unknown, res: any) => {
+        return documentModelPromise
+          .then((document) => res.type('text/plain').send(buildLlmsTxt(document, { ...llmsTxtOptions, docsBaseUrl })))
+          .catch((err: unknown) => {
+            console.error('DocfyUiModule: failed to build llms.txt:', err);
+            res.status(500).send('Failed to build llms.txt');
+          });
+      });
+
+      httpAdapter.get(`${basePath}llms-full.txt`.replace(/\/+/g, '/'), (_req: unknown, res: any) => {
+        return documentModelPromise
+          .then((document) =>
+            res.type('text/plain').send(buildLlmsFullTxt(document, { ...llmsTxtOptions, docsBaseUrl })),
+          )
+          .catch((err: unknown) => {
+            console.error('DocfyUiModule: failed to build llms-full.txt:', err);
+            res.status(500).send('Failed to build llms-full.txt');
+          });
+      });
+    }
 
     let proxyPath: string | undefined;
     if (options.openApiDocument || options.additionalProxyOrigins) {

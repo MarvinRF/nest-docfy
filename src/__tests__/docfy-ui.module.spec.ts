@@ -1,7 +1,19 @@
 import * as fs from 'fs';
 import * as os from 'os';
 import * as path from 'path';
+import { buildLlmsFullTxt, buildLlmsTxt, normalizeDocument } from 'docfy-core';
+import type { DocumentModel } from 'docfy-core';
 import { DocfyUiModule, DocfyUiSetupTarget } from '../docfy-ui.module';
+
+jest.mock('docfy-core', () => ({
+  normalizeDocument: jest.fn(),
+  buildLlmsTxt: jest.fn(),
+  buildLlmsFullTxt: jest.fn(),
+}));
+
+const mockNormalizeDocument = normalizeDocument as jest.MockedFunction<typeof normalizeDocument>;
+const mockBuildLlmsTxt = buildLlmsTxt as jest.MockedFunction<typeof buildLlmsTxt>;
+const mockBuildLlmsFullTxt = buildLlmsFullTxt as jest.MockedFunction<typeof buildLlmsFullTxt>;
 
 type ScopedCall = { method: 'register' | 'setNotFoundHandler'; args: unknown[] };
 type ScopedRegistration = { opts: { prefix: string }; scopedCalls: ScopedCall[] };
@@ -224,6 +236,98 @@ describe('DocfyUiModule.setup() — Express', () => {
 
     expect(res.statusCode).toBe(403);
     expect(res.headers['x-docfy-proxy-error']).toBe('origin_not_allowed');
+  });
+
+  describe('llmsTxt option', () => {
+    const fakeDocument: DocumentModel = {
+      info: { title: 'Demo API', version: '1.0.0', description: undefined },
+      tagGroups: [],
+      securitySchemes: {},
+      servers: [],
+    };
+
+    afterEach(() => {
+      jest.clearAllMocks();
+    });
+
+    it('does not register llms.txt routes when the option is omitted', () => {
+      const { app, calls } = makeRecordingApp();
+      DocfyUiModule.setup('/docs', app);
+
+      expect(calls.some((c) => typeof c.args[0] === 'string' && c.args[0].includes('llms'))).toBe(false);
+    });
+
+    it('warns and registers nothing when llmsTxt: true is given without staticSpecPath', () => {
+      const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+      const { app, calls } = makeRecordingApp();
+      DocfyUiModule.setup('/docs', app, { llmsTxt: true });
+
+      expect(calls.some((c) => typeof c.args[0] === 'string' && c.args[0].includes('llms'))).toBe(false);
+      expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('llmsTxt: true'));
+      warnSpy.mockRestore();
+    });
+
+    it('serves llms.txt and llms-full.txt scoped under mountPath when llmsTxt.document is given', async () => {
+      mockNormalizeDocument.mockResolvedValue(fakeDocument);
+      mockBuildLlmsTxt.mockReturnValue('llms.txt body');
+      mockBuildLlmsFullTxt.mockReturnValue('llms-full.txt body');
+
+      const { app, calls } = makeRecordingApp();
+      DocfyUiModule.setup('/docs', app, { llmsTxt: { document: { openapi: '3.0.0' } } });
+
+      const llmsTxtCall = calls.find((c) => c.args[0] === '/docs/llms.txt');
+      const llmsFullTxtCall = calls.find((c) => c.args[0] === '/docs/llms-full.txt');
+      expect(llmsTxtCall).toBeDefined();
+      expect(llmsFullTxtCall).toBeDefined();
+
+      const res = makeMockResponse();
+      await (llmsTxtCall!.args[1] as (req: unknown, res: unknown) => Promise<void>)(undefined, res);
+
+      expect(mockNormalizeDocument).toHaveBeenCalledWith({ openapi: '3.0.0' });
+      expect(mockBuildLlmsTxt).toHaveBeenCalledWith(fakeDocument, {
+        title: undefined,
+        description: undefined,
+        docsBaseUrl: '/docs/',
+      });
+      expect(res.headers['Content-Type']).toBe('text/plain');
+      expect(res.body).toBe('llms.txt body');
+    });
+
+    it('reuses the parsed staticSpecPath document when llmsTxt: true is given alongside it', async () => {
+      const tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'docfy-ui-module-llms-'));
+      const specPath = path.join(tmpDir, 'openapi.json');
+      fs.writeFileSync(specPath, '{"openapi":"3.0.0","info":{"title":"From file"}}');
+
+      mockNormalizeDocument.mockResolvedValue(fakeDocument);
+      mockBuildLlmsTxt.mockReturnValue('llms.txt body');
+      mockBuildLlmsFullTxt.mockReturnValue('llms-full.txt body');
+
+      const { app, calls } = makeRecordingApp();
+      DocfyUiModule.setup('/docs', app, { staticSpecPath: specPath, llmsTxt: true });
+
+      const llmsTxtCall = calls.find((c) => c.args[0] === '/docs/llms.txt')!;
+      const res = makeMockResponse();
+      await (llmsTxtCall.args[1] as (req: unknown, res: unknown) => Promise<void>)(undefined, res);
+
+      expect(mockNormalizeDocument).toHaveBeenCalledWith({ openapi: '3.0.0', info: { title: 'From file' } });
+
+      fs.rmSync(tmpDir, { recursive: true, force: true });
+    });
+
+    it('responds 500 when building llms.txt fails', async () => {
+      const errorSpy = jest.spyOn(console, 'error').mockImplementation(() => {});
+      mockNormalizeDocument.mockRejectedValue(new Error('boom'));
+
+      const { app, calls } = makeRecordingApp();
+      DocfyUiModule.setup('/docs', app, { llmsTxt: { document: {} } });
+
+      const llmsTxtCall = calls.find((c) => c.args[0] === '/docs/llms.txt')!;
+      const res = makeMockResponse();
+      await (llmsTxtCall.args[1] as (req: unknown, res: unknown) => Promise<void>)(undefined, res);
+
+      expect(res.statusCode).toBe(500);
+      errorSpy.mockRestore();
+    });
   });
 });
 
