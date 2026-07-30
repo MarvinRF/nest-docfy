@@ -274,14 +274,14 @@ Verify that every controller is fully documented before merging. Exits with code
 npx nestjs-docfy check [options]
 ```
 
-| Option              | Default              | Description                                                                                                        |
-| ------------------- | -------------------- | -------------------------------------------------------------------------------------------------------------------- |
-| `--root <path>`     | `.`                  | Project root directory                                                                                             |
-| `--tsconfig <path>` | auto-detected        | Path to `tsconfig.json`                                                                                            |
-| `--pattern <glob>`  | `**/*.controller.ts` | Glob pattern to find controllers                                                                                   |
-| `--format <format>` | `ts`                 | Docs file format to look for: `ts` or `js`                                                                         |
-| `--json`            | `false`              | Output a single machine-readable JSON object instead of formatted text: `{ controllersChecked, issues, passed }`   |
-| `--quiet`           | `false`              | Suppress all output except errors                                                                                  |
+| Option              | Default              | Description                                                                                                      |
+| ------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------- |
+| `--root <path>`     | `.`                  | Project root directory                                                                                           |
+| `--tsconfig <path>` | auto-detected        | Path to `tsconfig.json`                                                                                          |
+| `--pattern <glob>`  | `**/*.controller.ts` | Glob pattern to find controllers                                                                                 |
+| `--format <format>` | `ts`                 | Docs file format to look for: `ts` or `js`                                                                       |
+| `--json`            | `false`              | Output a single machine-readable JSON object instead of formatted text: `{ controllersChecked, issues, passed }` |
+| `--quiet`           | `false`              | Suppress all output except errors                                                                                |
 
 **What it checks:**
 
@@ -323,15 +323,15 @@ Measure what percentage of your endpoints are documented. Useful as an objective
 npx nestjs-docfy coverage [options]
 ```
 
-| Option              | Default              | Description                                                                                                                  |
-| ------------------- | -------------------- | ---------------------------------------------------------------------------------------------------------------------------- |
-| `--root <path>`     | `.`                  | Project root directory                                                                                                       |
-| `--tsconfig <path>` | auto-detected        | Path to `tsconfig.json`                                                                                                      |
-| `--pattern <glob>`  | `**/*.controller.ts` | Glob pattern to find controllers                                                                                             |
-| `--format <format>` | `ts`                 | Docs file format to look for: `ts` or `js`                                                                                   |
+| Option              | Default              | Description                                                                                                                 |
+| ------------------- | -------------------- | --------------------------------------------------------------------------------------------------------------------------- |
+| `--root <path>`     | `.`                  | Project root directory                                                                                                      |
+| `--tsconfig <path>` | auto-detected        | Path to `tsconfig.json`                                                                                                     |
+| `--pattern <glob>`  | `**/*.controller.ts` | Glob pattern to find controllers                                                                                            |
+| `--format <format>` | `ts`                 | Docs file format to look for: `ts` or `js`                                                                                  |
 | `--min <percent>`   | none                 | Minimum coverage required (0-100), exits `1` if below                                                                       |
 | `--json`            | `false`              | Output a single machine-readable JSON object instead of formatted text: the `CoverageReport` fields plus `min` and `passed` |
-| `--quiet`           | `false`              | Suppress all output except errors                                                                                            |
+| `--quiet`           | `false`              | Suppress all output except errors                                                                                           |
 
 **Example output:**
 
@@ -495,12 +495,12 @@ export default async function () {
 npx nestjs-docfy export --entry docfy-export.ts --out openapi.json
 ```
 
-| Option           | Default      | Description                                                        |
-| ---------------- | ------------ | -------------------------------------------------------------------- |
-| `--entry <path>` | _(required)_ | `.ts`/`.js` file whose default export returns `{ app, document }`  |
-| `--out <path>`   | stdout       | Where to write the document                                        |
-| `--root <path>`  | `.`          | Project root — where `ts-node`/`tsconfig-paths` are resolved from  |
-| `--quiet`        | `false`      | Suppress informational output (errors still go to stderr)          |
+| Option           | Default      | Description                                                       |
+| ---------------- | ------------ | ----------------------------------------------------------------- |
+| `--entry <path>` | _(required)_ | `.ts`/`.js` file whose default export returns `{ app, document }` |
+| `--out <path>`   | stdout       | Where to write the document                                       |
+| `--root <path>`  | `.`          | Project root — where `ts-node`/`tsconfig-paths` are resolved from |
+| `--quiet`        | `false`      | Suppress informational output (errors still go to stderr)         |
 
 A `.ts` entry file needs `ts-node` as a devDependency of your project (for `tsconfig-paths` support too, if your project uses path aliases like `@app/common`). Informational output always goes to stderr, never stdout — safe to pipe: `npx nestjs-docfy export --entry docfy-export.ts > openapi.json`.
 
@@ -634,9 +634,12 @@ await app.listen(3000);
 
 Visit `/docs`: no further configuration needed, since `docfy-ui` fetches `/api-json` same-origin by default.
 
-| Option           | Type     | Default | Description                                                                                   |
-| ---------------- | -------- | ------- | --------------------------------------------------------------------------------------------- |
-| `staticSpecPath` | `string` | —       | Path to a pre-built OpenAPI JSON file, served at `/api-json` _instead of_ the app's live one. |
+| Option                   | Type                              | Default | Description                                                                                                                            |
+| ------------------------ | --------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `staticSpecPath`         | `string`                          | —       | Path to a pre-built OpenAPI JSON file, served at `/api-json` _instead of_ the app's live one.                                          |
+| `specs`                  | `{ name: string; url: string }[]` | —       | Extra OpenAPI specs to offer in `docfy-ui`'s spec switcher, so one deployed instance can browse more than one service's documentation. |
+| `openApiDocument`        | `{ servers?: { url: string }[] }` | —       | Enables the "Try it out" same-origin proxy — pass the same object you already have from `SwaggerModule.createDocument()`. See below.   |
+| `additionalProxyOrigins` | `string[]`                        | —       | Extra origins the proxy is allowed to forward requests to, beyond what `openApiDocument.servers` declares.                             |
 
 **`staticSpecPath`: needed if your app builds with `"webpack": true`, and you're not using the [CLI plugin](#webpack-true-build-mode).** `DocfyModule`'s runtime metadata pipeline cannot apply docs files there, so the live `/api-json` will be missing everything docs files would otherwise add. Generate a patched document ahead of time:
 
@@ -655,6 +658,18 @@ Call this **before** `SwaggerModule.setup()`: Express resolves routes in registr
 > **Fastify caveat**: `SwaggerModule.setup()` also registers its own `/api-json` route by default. On Express, whichever route is registered first silently wins. On Fastify, registering the same exact route twice throws `FST_ERR_DUPLICATED_ROUTE` at startup instead. Registration order does not save you. When using `staticSpecPath` together with Fastify, point `SwaggerModule.setup()` at a different `jsonDocumentUrl`, or pass `{ raw: false }`, so it doesn't also claim `/api-json`.
 >
 > `docfy-ui` reads the mount prefix `DocfyUiModule.setup()` injects (`window.__DOCFY_BASE_PATH__`) and passes it as `BrowserRouter`'s `basename`, so deep client-side routes (e.g. reloading an endpoint's detail page directly) resolve correctly at any `mountPath`, not just `/`.
+
+**`openApiDocument` / `additionalProxyOrigins`: enables `docfy-ui`'s "Try it out" same-origin proxy.** Without it, "Try it out" does a direct `fetch()` from the browser to the target API, subject to that API's own CORS policy. With it, the browser instead calls a same-origin route this module registers (`POST {mountPath}/__docfy_proxy`), and the proxy makes the real request server-to-server — CORS never applies.
+
+```ts
+const document = SwaggerModule.createDocument(app, new DocumentBuilder().build());
+SwaggerModule.setup('api', app, document);
+DocfyUiModule.setup('/docs', app, { openApiDocument: document });
+```
+
+The proxy's allowlist is built **only** from absolute URLs in the OpenAPI document's `servers[]` array (plus anything in `additionalProxyOrigins`) — a request for any other origin gets rejected with `403` and an `X-Docfy-Proxy-Error: origin_not_allowed` response header. There is deliberately no implicit "same origin as this request" fallback: that would have to be derived from client-controlled request headers (`Host`), which is a classic SSRF vector — someone hitting the proxy endpoint directly (not through a browser, no CORS involved) could forge it to reach an internal-only origin. Declare `servers[]` in your `DocumentBuilder` config to opt an origin in; without any absolute `servers[]` entry, the route exists but always returns `403`.
+
+Every other proxy failure (target unreachable, timeout) also sets `X-Docfy-Proxy-Error`, so `docfy-ui` can tell a proxy-level failure apart from a real `4xx`/`5xx` response coming from your API — those pass through untouched, with their real status/headers/body.
 
 ## Interface-typed DTOs
 
