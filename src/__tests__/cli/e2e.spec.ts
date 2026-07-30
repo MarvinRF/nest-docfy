@@ -16,6 +16,25 @@ function fix(name: string): string {
   return path.join(FIXTURES, name);
 }
 
+// scan-controllers.spec.ts and watch.spec.ts read fixtures/scan concurrently
+// (separate Jest worker processes, different files) — mutating the checked-in
+// fixture in place raced with their reads and produced sporadic
+// "Cannot read properties of undefined" failures there. Each describe block
+// below gets its own throwaway copy instead, so writes/deletes never touch
+// the directory other test files depend on staying read-only.
+const isolatedDirs: string[] = [];
+
+function isolatedFixture(name: string): string {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), `docfy-e2e-${name}-`));
+  fs.cpSync(fix(name), dir, { recursive: true });
+  isolatedDirs.push(dir);
+  return dir;
+}
+
+afterAll(() => {
+  for (const dir of isolatedDirs) fs.rmSync(dir, { recursive: true, force: true });
+});
+
 function run(args: string, cwd?: string): { stdout: string; stderr: string; code: number } {
   const opts: ExecSyncOptionsWithBufferEncoding = { encoding: 'buffer', cwd };
   try {
@@ -77,7 +96,7 @@ function cleanup(dir: string): void {
 // Simple project
 // ---------------------------------------------------------------------------
 describe('E2E — simple project', () => {
-  const ROOT = fix('scan');
+  const ROOT = isolatedFixture('scan');
 
   afterEach(() => cleanup(ROOT));
 
@@ -157,7 +176,7 @@ describe('E2E — simple project', () => {
 // "fully documented" a fragile thing to assert against).
 // ---------------------------------------------------------------------------
 describe('E2E — check/coverage --json', () => {
-  const ROOT = fix('json-output');
+  const ROOT = isolatedFixture('json-output');
 
   afterEach(() => cleanup(ROOT));
 
@@ -206,7 +225,7 @@ describe('E2E — check/coverage --json', () => {
 // NX monorepo
 // ---------------------------------------------------------------------------
 describe('E2E — NX monorepo', () => {
-  const ROOT = fix('nx');
+  const ROOT = isolatedFixture('nx');
 
   afterEach(() => cleanup(ROOT));
 
@@ -237,7 +256,7 @@ describe('E2E — NX monorepo', () => {
 // Nest CLI monorepo
 // ---------------------------------------------------------------------------
 describe('E2E — Nest CLI monorepo', () => {
-  const ROOT = fix('nest-cli');
+  const ROOT = isolatedFixture('nest-cli');
 
   afterEach(() => cleanup(ROOT));
 
@@ -259,7 +278,7 @@ describe('E2E — Nest CLI monorepo', () => {
 // Generic monorepo
 // ---------------------------------------------------------------------------
 describe('E2E — Generic monorepo', () => {
-  const ROOT = fix('generic');
+  const ROOT = isolatedFixture('generic');
 
   afterEach(() => cleanup(ROOT));
 
@@ -281,7 +300,7 @@ describe('E2E — Generic monorepo', () => {
 // Exit codes
 // ---------------------------------------------------------------------------
 describe('E2E — exit codes', () => {
-  const ROOT = fix('scan');
+  const ROOT = isolatedFixture('scan');
 
   afterEach(() => cleanup(ROOT));
 
@@ -312,7 +331,7 @@ describe('E2E — exit codes', () => {
 // Security: output files never land outside project root
 // ---------------------------------------------------------------------------
 describe('E2E — security: output confinement', () => {
-  const ROOT = fix('scan');
+  const ROOT = isolatedFixture('scan');
 
   afterEach(() => cleanup(ROOT));
 
