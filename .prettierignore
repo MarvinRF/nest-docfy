@@ -3,3 +3,4 @@ dist
 coverage
 src/__tests__/cli/fixtures
 examples
+CHANGELOG.md
