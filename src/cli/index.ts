@@ -651,11 +651,14 @@ program
 program
   .command('export')
   .description(
-    'Boot the project\'s own Nest app (via a small entry file you provide) and write the ' +
+    "Boot the project's own Nest app (via a small entry file you provide) and write the " +
       'OpenAPI document it produces, without binding a port. Unlike patch-spec, this generates ' +
       'the base document too (not just patches an existing one) — see README for the entry file contract.',
   )
-  .requiredOption('--entry <path>', 'Path to a .ts/.js file whose default export boots the app and returns { app, document }')
+  .requiredOption(
+    '--entry <path>',
+    'Path to a .ts/.js file whose default export boots the app and returns { app, document }',
+  )
   .option('--out <path>', 'Where to write the document (default: stdout)')
   .option('--root <path>', 'Project root directory', '.')
   .option('--quiet', 'Suppress all output except errors', false)

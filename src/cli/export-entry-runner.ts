@@ -31,9 +31,7 @@ async function run(): Promise<void> {
       ? (mod as () => Promise<EntryResult>)
       : (mod as { default?: () => Promise<EntryResult> }).default;
   if (typeof bootstrap !== 'function') {
-    throw new Error(
-      `${entryPath} must have a default export: an async function returning { app, document }.`,
-    );
+    throw new Error(`${entryPath} must have a default export: an async function returning { app, document }.`);
   }
 
   const { app, document } = await bootstrap();
@@ -43,6 +41,8 @@ async function run(): Promise<void> {
 }
 
 run().catch((err: unknown) => {
-  process.stderr.write(`export-entry-runner failed: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`);
+  process.stderr.write(
+    `export-entry-runner failed: ${err instanceof Error ? (err.stack ?? err.message) : String(err)}\n`,
+  );
   process.exit(1);
 });
