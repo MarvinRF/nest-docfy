@@ -2,9 +2,10 @@ name: PR Check
 
 # Dogfoods the CLI's own check/coverage gates against examples/basic-nest-app
 # on every PR, posting (and updating, not spamming) a single summary comment.
-# This is the "bot de PR" step of the governance roadmap block — scoped to
-# current-state reporting only (no coverage delta vs. main yet, that needs
-# baseline caching across runs; see the roadmap notes).
+# This is the "bot de PR" step of the governance roadmap block. Also diffs
+# the example app's OpenAPI spec (PR head vs. the PR's base commit) via
+# docfy-core's diffDocuments(), surfacing breaking changes in the same
+# comment — informational only, does not fail the job.
 on:
   pull_request:
     branches: [main]
@@ -18,6 +19,11 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base-ref
 
       - uses: actions/setup-node@v4
         with:
@@ -34,12 +40,35 @@ jobs:
       - name: Run coverage
         run: node dist/cli/index.js coverage --root examples/basic-nest-app --json --min 80 > coverage.json || true
 
+      - name: Export spec (PR head)
+        run: |
+          cd examples/basic-nest-app
+          npm ci
+          node ../../dist/cli/index.js export --entry docfy-export.ts --out ../../new-spec.json
+
+      - name: Export spec (PR base)
+        run: |
+          cd base-ref
+          npm ci
+          npm run build
+          cd examples/basic-nest-app
+          npm ci
+          node ../../dist/cli/index.js export --entry docfy-export.ts --out ../../../old-spec.json
+
+      - name: Diff specs
+        env:
+          OLD_SPEC_PATH: old-spec.json
+          NEW_SPEC_PATH: new-spec.json
+          DIFF_JSON_PATH: diff.json
+        run: node .github/scripts/spec-diff.mjs || true
+
       - name: Comment on PR
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           PR_NUMBER: ${{ github.event.pull_request.number }}
           CHECK_JSON_PATH: check.json
           COVERAGE_JSON_PATH: coverage.json
+          DIFF_JSON_PATH: diff.json
         run: node .github/scripts/pr-comment.mjs
 
       - name: Fail the job if check or coverage did not pass

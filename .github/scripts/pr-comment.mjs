@@ -5,7 +5,7 @@
 // Required env vars: GITHUB_TOKEN, GITHUB_REPOSITORY (owner/repo), PR_NUMBER,
 // CHECK_JSON_PATH, COVERAGE_JSON_PATH.
 
-import { readFileSync } from 'node:fs';
+import { readFileSync, existsSync } from 'node:fs';
 
 const MARKER = '<!-- nestjs-docfy-pr-check -->';
 
@@ -26,7 +26,37 @@ export function formatIssue(issue) {
   return `- ❌ **${issue.controllerClass}** — undocumented methods: ${issue.methods.join(', ')}`;
 }
 
-export function buildBody(check, coverage) {
+function formatEndpoint(endpoint) {
+  return `\`${endpoint.method} ${endpoint.path}\``;
+}
+
+export function formatDiffSection(diff) {
+  if (!diff || (diff.added.length === 0 && diff.removed.length === 0 && diff.changed.length === 0)) {
+    return ['✅ **spec diff** — no changes vs. the PR base.'];
+  }
+
+  const lines = [];
+  const breakingLabel = diff.breakingCount > 0 ? `⚠️ ${diff.breakingCount} breaking` : 'no breaking changes';
+  lines.push(`**spec diff vs. base** — ${breakingLabel}:`);
+  lines.push('');
+
+  if (diff.added.length > 0) {
+    lines.push(`- ➕ Added: ${diff.added.map(formatEndpoint).join(', ')}`);
+  }
+  if (diff.removed.length > 0) {
+    lines.push(`- ➖ Removed: ${diff.removed.map(formatEndpoint).join(', ')}`);
+  }
+  for (const entry of diff.changed) {
+    for (const change of entry.changes) {
+      const icon = change.severity === 'breaking' ? '⚠️' : 'ℹ️';
+      lines.push(`- ${icon} \`${entry.method} ${entry.path}\` — ${change.description}`);
+    }
+  }
+
+  return lines;
+}
+
+export function buildBody(check, coverage, diff) {
   const lines = [MARKER, '## 📋 nestjs-docfy PR check', ''];
 
   lines.push(check.passed ? '✅ **check** — all controllers fully documented.' : '❌ **check** — drift found:');
@@ -45,6 +75,8 @@ export function buildBody(check, coverage) {
     '',
     `<sub>${coverage.documentedEndpoints}/${coverage.totalEndpoints} endpoints documented across ${coverage.totalControllers} controller(s).</sub>`,
   );
+
+  lines.push('', ...formatDiffSection(diff));
 
   return lines.join('\n');
 }
@@ -72,10 +104,12 @@ async function main() {
   const prNumber = requireEnv('PR_NUMBER');
   const checkPath = requireEnv('CHECK_JSON_PATH');
   const coveragePath = requireEnv('COVERAGE_JSON_PATH');
+  const diffPath = process.env.DIFF_JSON_PATH;
 
   const check = readJson(checkPath);
   const coverage = readJson(coveragePath);
-  const body = buildBody(check, coverage);
+  const diff = diffPath && existsSync(diffPath) ? readJson(diffPath) : undefined;
+  const body = buildBody(check, coverage, diff);
 
   const comments = await githubRequest(`/repos/${repo}/issues/${prNumber}/comments`, token);
   const existing = comments.find((c) => c.body?.includes(MARKER));
