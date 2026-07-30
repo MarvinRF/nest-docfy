@@ -1,0 +1,127 @@
+name: docfy PR check (reusable)
+
+# Reusable workflow for consumers of the published `nestjs-docfy` package —
+# runs `check`/`coverage` (and, when --entry is available, a breaking-change
+# spec diff against the PR's base commit) via `npx`, posting a single
+# summary comment. This is the "workflow reusável pra qualquer consumidor"
+# half of the PR-bot roadmap item; pr-check.yml (this repo's own workflow)
+# instead builds nest-docfy from source, to dogfood unreleased changes.
+#
+# Usage, in a consumer repo's own workflow:
+#
+#   jobs:
+#     docfy:
+#       uses: MarvinRF/nest-docfy/.github/workflows/docfy-pr-check-reusable.yml@main
+#       with:
+#         root: .                      # project root (default: repo root)
+#         export-entry: docfy-export.ts # optional: enables the spec diff step
+#         min-coverage: 80
+
+on:
+  workflow_call:
+    inputs:
+      root:
+        description: 'Project root, relative to the repo root'
+        type: string
+        default: '.'
+      export-entry:
+        description: >
+          Path (relative to root) to an export entry file (see nest-docfy's
+          "CLI: export" docs). Omit to skip the spec-diff step — check/coverage
+          don't need it.
+        type: string
+        default: ''
+      min-coverage:
+        description: 'Minimum coverage percentage required, fails the job if below'
+        type: number
+        default: 80
+      node-version:
+        description: 'Node.js version to run the checks with'
+        type: string
+        default: '22.x'
+      docfy-version:
+        description: 'nestjs-docfy npm dist-tag/version to run (via npx)'
+        type: string
+        default: 'latest'
+      docfy-ref:
+        description: 'nest-docfy git ref to pull the PR-comment/spec-diff scripts from'
+        type: string
+        default: 'main'
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  docfy-check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - if: inputs.export-entry != ''
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.base.sha }}
+          path: base-ref
+
+      - uses: actions/checkout@v4
+        with:
+          repository: MarvinRF/nest-docfy
+          ref: ${{ inputs.docfy-ref }}
+          path: .docfy-tools
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ inputs.node-version }}
+
+      - name: Run check
+        run: npx -y nestjs-docfy@${{ inputs.docfy-version }} check --root ${{ inputs.root }} --json > check.json || true
+
+      - name: Run coverage
+        run: |
+          npx -y nestjs-docfy@${{ inputs.docfy-version }} coverage --root ${{ inputs.root }} \
+            --json --min ${{ inputs.min-coverage }} > coverage.json || true
+
+      - name: Export spec (PR head)
+        if: inputs.export-entry != ''
+        run: |
+          npm ci --prefix ${{ inputs.root }}
+          npx -y nestjs-docfy@${{ inputs.docfy-version }} export \
+            --entry ${{ inputs.export-entry }} --root ${{ inputs.root }} --out new-spec.json
+
+      - name: Export spec (PR base)
+        if: inputs.export-entry != ''
+        run: |
+          npm ci --prefix base-ref/${{ inputs.root }}
+          npx -y nestjs-docfy@${{ inputs.docfy-version }} export \
+            --entry ${{ inputs.export-entry }} --root base-ref/${{ inputs.root }} --out old-spec.json
+
+      - name: Diff specs
+        if: inputs.export-entry != ''
+        env:
+          OLD_SPEC_PATH: old-spec.json
+          NEW_SPEC_PATH: new-spec.json
+          DIFF_JSON_PATH: diff.json
+        run: |
+          npm install --no-save docfy-core
+          node .docfy-tools/.github/scripts/spec-diff.mjs || true
+
+      - name: Comment on PR
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          CHECK_JSON_PATH: check.json
+          COVERAGE_JSON_PATH: coverage.json
+          DIFF_JSON_PATH: diff.json
+        run: node .docfy-tools/.github/scripts/pr-comment.mjs
+
+      - name: Fail the job if check or coverage did not pass
+        run: |
+          node -e "
+            const check = require('./check.json');
+            const coverage = require('./coverage.json');
+            if (!check.passed || !coverage.passed) {
+              console.error('check.passed:', check.passed, '/ coverage.passed:', coverage.passed);
+              process.exit(1);
+            }
+          "

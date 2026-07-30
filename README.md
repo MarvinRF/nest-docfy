@@ -31,6 +31,7 @@ Keep your NestJS controllers clean. Swagger documentation lives in a dedicated c
 - [CLI: lint](#cli-lint)
 - [CLI: patch-spec](#cli-patch-spec)
 - [CLI: generate-client](#cli-generate-client)
+- [GitHub Actions: PR check](#github-actions-pr-check)
 - [API reference](#api-reference)
   - [DocfyModule.forRoot()](#docfymoduleforrootoptions)
   - [@WithDocs()](#withdocs)
@@ -536,6 +537,36 @@ const { data, error } = await api.GET('/users/{id}', { params: { path: { id: '12
 ```
 
 `openapi-fetch` is **not** a dependency of `nestjs-docfy` itself, since only the generated `client.ts` imports it, so install it in your own project: `npm install openapi-fetch`.
+
+## GitHub Actions: PR check
+
+A reusable workflow that runs `check`/`coverage` — and, when given an [export entry file](#cli-export), a breaking-change spec diff against the PR's base commit — and posts (and updates, never spams) a single summary comment on the PR.
+
+```yaml
+# .github/workflows/docfy.yml
+name: docfy
+on:
+  pull_request:
+    branches: [main]
+
+jobs:
+  docfy:
+    uses: MarvinRF/nest-docfy/.github/workflows/docfy-pr-check-reusable.yml@main
+    with:
+      root: . # project root, relative to your repo root (default: ".")
+      export-entry: docfy-export.ts # optional — omit to skip the spec diff
+      min-coverage: 80
+```
+
+| Input           | Default  | Description                                              |
+| --------------- | -------- | -------------------------------------------------------- |
+| `root`          | `.`      | Project root, relative to the repo root                  |
+| `export-entry`  | _(none)_ | Path to an export entry file; enables the spec-diff step |
+| `min-coverage`  | `80`     | Minimum coverage percentage, fails the job if below      |
+| `node-version`  | `22.x`   | Node.js version to run the checks with                   |
+| `docfy-version` | `latest` | `nestjs-docfy` npm dist-tag/version to run               |
+
+The job fails if `check` finds drift or `coverage` is below `min-coverage`; the spec diff is informational only (breaking changes are sometimes intentional) and never fails the job on its own.
 
 ## API reference
 
