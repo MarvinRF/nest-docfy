@@ -6,7 +6,7 @@ import { mergeDocsFile } from './merge-docs';
 import { deriveDocsFilePath } from './scan-controllers';
 import type { ControllerInfo } from './extract-methods';
 
-export type WriteOutcome = 'created' | 'skipped' | 'merged' | 'dry' | 'error';
+export type WriteOutcome = 'created' | 'skipped' | 'merged' | 'overwritten' | 'dry' | 'error';
 
 export interface WriteResult {
   controllerClass: string;
@@ -20,6 +20,9 @@ export interface WriterOptions {
   projectRoot: string;
   outDir?: string;
   force: boolean;
+  /** Discards existing docs file content and regenerates it from scratch, instead of merging
+   * new methods into it (--force's behavior). Takes precedence over --force when both are set. */
+  overwrite: boolean;
   dryRun: boolean;
   format: 'ts' | 'js';
 }
@@ -76,9 +79,27 @@ export function writeDocsFile(ctrl: ControllerInfo, opts: WriterOptions): WriteR
     return { controllerClass: ctrl.className, docsFilePath, outcome: 'dry' };
   }
 
-  // --- SKIP (file exists, no --force) ---
-  if (exists && !opts.force) {
+  // --- SKIP (file exists, neither --force nor --overwrite) ---
+  if (exists && !opts.force && !opts.overwrite) {
     return { controllerClass: ctrl.className, docsFilePath, outcome: 'skipped' };
+  }
+
+  // --- OVERWRITE (file exists + --overwrite: skip merge, regenerate from scratch) ---
+  if (exists && opts.overwrite) {
+    try {
+      const dir = path.dirname(docsFilePath);
+      fs.mkdirSync(dir, { recursive: true });
+      const content = renderDocsFile(ctrl, docsFilePath, opts.format);
+      fs.writeFileSync(docsFilePath, content, 'utf8');
+      return { controllerClass: ctrl.className, docsFilePath, outcome: 'overwritten' };
+    } catch (err) {
+      return {
+        controllerClass: ctrl.className,
+        docsFilePath,
+        outcome: 'error',
+        error: err instanceof Error ? err.message : String(err),
+      };
+    }
   }
 
   // --- MERGE (file exists + --force) ---

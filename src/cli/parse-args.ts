@@ -9,6 +9,7 @@ export interface CliOptions {
   pattern: string;
   out: string | undefined;
   force: boolean;
+  overwrite: boolean;
   dryRun: boolean;
   quiet: boolean;
   format: OutputFormat;
@@ -76,6 +77,7 @@ export function parseAndValidateOptions(raw: {
   pattern?: string;
   out?: string;
   force?: boolean;
+  overwrite?: boolean;
   dryRun?: boolean;
   quiet?: boolean;
   format?: string;
@@ -101,6 +103,7 @@ export function parseAndValidateOptions(raw: {
     pattern,
     out,
     force: raw.force ?? false,
+    overwrite: raw.overwrite ?? false,
     dryRun: raw.dryRun ?? false,
     quiet: raw.quiet ?? false,
     format: format as OutputFormat,
