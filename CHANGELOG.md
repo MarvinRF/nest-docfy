@@ -1,3 +1,15 @@
+# [0.13.0](https://github.com/MarvinRF/nest-docfy/compare/v0.12.0...v0.13.0) (2026-07-31)
+
+
+### Bug Fixes
+
+* force-close keep-alive sockets in mock/contract-test helpers ([d8a38d2](https://github.com/MarvinRF/nest-docfy/commit/d8a38d26b885d791e1b9ac7232e7e0f4d4306135))
+
+
+### Features
+
+* **cli:** add --overwrite to generate and version-drift warning to check ([e631455](https://github.com/MarvinRF/nest-docfy/commit/e6314559e0c1aa7291ecf5978301c3093080620b))
+
 # [0.12.0](https://github.com/MarvinRF/nest-docfy/compare/v0.11.0...v0.12.0) (2026-07-31)
 
 
