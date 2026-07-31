@@ -14,7 +14,10 @@ async function withServer(handler: http.RequestListener, run: (baseUrl: string) 
   try {
     await run(`http://127.0.0.1:${port}`);
   } finally {
-    await new Promise<void>((resolve) => server.close(() => resolve()));
+    await new Promise<void>((resolve) => {
+      server.close(() => resolve());
+      server.closeAllConnections();
+    });
   }
 }
 
