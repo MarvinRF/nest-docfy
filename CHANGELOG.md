@@ -1,3 +1,10 @@
+# [0.12.0](https://github.com/MarvinRF/nest-docfy/compare/v0.11.0...v0.12.0) (2026-07-31)
+
+
+### Features
+
+* add lint-spec CLI command and guides option to DocfyUiModule ([b91e012](https://github.com/MarvinRF/nest-docfy/commit/b91e0129f777792a4030f731b9697b25ed99c9eb))
+
 # [0.11.0](https://github.com/MarvinRF/nest-docfy/compare/v0.10.0...v0.11.0) (2026-07-31)
 
 
