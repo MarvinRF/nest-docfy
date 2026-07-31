@@ -238,6 +238,43 @@ describe('DocfyUiModule.setup() — Express', () => {
     expect(res.headers['x-docfy-proxy-error']).toBe('origin_not_allowed');
   });
 
+  describe('guides option', () => {
+    function getFallbackBody(
+      app: ReturnType<typeof makeRecordingApp>['app'],
+      calls: ReturnType<typeof makeRecordingApp>['calls'],
+    ): string {
+      const fallback = calls.filter((c) => c.args[0] === '/docs').at(-1)!;
+      const handler = fallback.args[1] as (req: unknown, res: ReturnType<typeof makeMockResponse>) => void;
+      const res = makeMockResponse();
+      handler(undefined, res);
+      return res.body ?? '';
+    }
+
+    it('does not inject window.__DOCFY_GUIDES__ when guides is omitted', () => {
+      const { app, calls } = makeRecordingApp();
+      DocfyUiModule.setup('/docs', app);
+      expect(getFallbackBody(app, calls)).not.toContain('__DOCFY_GUIDES__');
+    });
+
+    it('injects window.__DOCFY_GUIDES__ as JSON when guides is provided', () => {
+      const { app, calls } = makeRecordingApp();
+      const guides = [{ slug: 'getting-started', title: 'Getting Started', content: '# Hi' }];
+      DocfyUiModule.setup('/docs', app, { guides });
+
+      expect(getFallbackBody(app, calls)).toContain(`window.__DOCFY_GUIDES__ = ${JSON.stringify(guides)};`);
+    });
+
+    it('escapes a literal </script> in guide content so it cannot break out of the injected <script> tag', () => {
+      const { app, calls } = makeRecordingApp();
+      const guides = [{ slug: 'xss', title: 'XSS', content: 'Example: <script>alert(1)</script>' }];
+      DocfyUiModule.setup('/docs', app, { guides });
+
+      const body = getFallbackBody(app, calls);
+      expect(body).not.toContain('</script>alert');
+      expect(body).toContain('\\u003cscript>alert(1)\\u003c/script>');
+    });
+  });
+
   describe('llmsTxt option', () => {
     const fakeDocument: DocumentModel = {
       info: { title: 'Demo API', version: '1.0.0', description: undefined },

@@ -98,6 +98,15 @@ export interface DocfyUiSetupOptions {
    * `info.title`/`info.description`.
    */
   llmsTxt?: true | { document: Record<string, unknown>; title?: string; description?: string };
+
+  /**
+   * Narrative markdown pages rendered at `{mountPath}/guides/:slug`, listed in `docfy-ui`'s
+   * sidebar above the endpoint tag tree — lets a `docfy-ui` instance mix guides/tutorials with
+   * the generated API reference, instead of being pure reference-only. Pass the already-read
+   * file contents (`fs.readFileSync(path, 'utf8')`), not a path — this module has no opinion on
+   * where guide files live in your project. Omit entirely to leave the sidebar unchanged.
+   */
+  guides?: { slug: string; title: string; content: string }[];
 }
 
 function loadFastifyStatic(): unknown {
@@ -233,11 +242,19 @@ export class DocfyUiModule {
     const proxyScript = proxyPath
       ? `\n    <script>window.__DOCFY_PROXY_PATH__ = ${JSON.stringify(proxyPath)};</script>`
       : '';
+    // Guide content is freeform prose (unlike the URLs/paths above) — plausibly containing a
+    // literal `</script>` (e.g. a tutorial showing an inline script tag as an example), which
+    // would otherwise prematurely close this script block and inject raw HTML into the page.
+    // Escaping `<` to its unicode escape is inert inside a JS string but can't be parsed as a
+    // tag by the HTML parser.
+    const guidesScript = options.guides
+      ? `\n    <script>window.__DOCFY_GUIDES__ = ${JSON.stringify(options.guides).replace(/</g, '\\u003c')};</script>`
+      : '';
     const indexHtml = fs
       .readFileSync(indexHtmlPath, 'utf8')
       .replace(
         '<head>',
-        `<head>\n    <base href="${basePath}" />\n    <script>window.__DOCFY_BASE_PATH__ = ${JSON.stringify(basePath)};</script>${specsScript}${proxyScript}`,
+        `<head>\n    <base href="${basePath}" />\n    <script>window.__DOCFY_BASE_PATH__ = ${JSON.stringify(basePath)};</script>${specsScript}${proxyScript}${guidesScript}`,
       );
 
     if (isFastify) {

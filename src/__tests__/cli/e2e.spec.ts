@@ -454,3 +454,80 @@ describeGenerateClient('E2E — generate-client', () => {
     expect(code).not.toBe(0);
   });
 });
+
+// ---------------------------------------------------------------------------
+// lint-spec
+// ---------------------------------------------------------------------------
+
+describe('E2E — lint-spec', () => {
+  let tmpDir: string;
+
+  beforeEach(() => {
+    tmpDir = fs.mkdtempSync(path.join(os.tmpdir(), 'docfy-lint-spec-e2e-'));
+  });
+
+  afterEach(() => {
+    fs.rmSync(tmpDir, { recursive: true, force: true });
+  });
+
+  function writeSpec(paths: Record<string, unknown>): void {
+    fs.writeFileSync(
+      path.join(tmpDir, 'spec.json'),
+      JSON.stringify({ openapi: '3.0.3', info: { title: 'Test API', version: '1.0.0' }, paths }),
+    );
+  }
+
+  it('exits 0 with no issues for a fully-documented spec', () => {
+    writeSpec({
+      '/users': {
+        get: {
+          tags: ['Users'],
+          summary: 'List users',
+          description: 'Lists all users.',
+          responses: { '200': { description: 'OK' }, '404': { description: 'Not Found' } },
+        },
+      },
+    });
+
+    const { code, stdout } = run('lint-spec --spec ./spec.json', tmpDir);
+    expect(code).toBe(0);
+    expect(stdout).toContain('passed every quality check');
+  });
+
+  it('exits 1 and lists each issue for an undocumented spec', () => {
+    writeSpec({ '/users': { get: { responses: { '200': { description: 'OK' } } } } });
+
+    const { code, stderr } = run('lint-spec --spec ./spec.json', tmpDir);
+    expect(code).toBe(1);
+    expect(stderr).toContain('missing-summary');
+    expect(stderr).toContain('missing-description');
+    expect(stderr).toContain('missing-tags');
+    expect(stderr).toContain('no-error-response');
+  });
+
+  it('supports --json with issuesFound/passed', () => {
+    writeSpec({ '/users': { get: { responses: { '200': { description: 'OK' } } } } });
+
+    const { code, stdout } = run('lint-spec --spec ./spec.json --json', tmpDir);
+    expect(code).toBe(1);
+    const parsed = JSON.parse(stdout);
+    expect(parsed.passed).toBe(false);
+    expect(parsed.issuesFound).toBeGreaterThan(0);
+  });
+
+  it('flags a duplicate operationId across two endpoints', () => {
+    writeSpec({
+      '/users': { get: { operationId: 'listUsers', responses: { '200': { description: 'OK' } } } },
+      '/users/{id}': { get: { operationId: 'listUsers', responses: { '200': { description: 'OK' } } } },
+    });
+
+    const { stderr } = run('lint-spec --spec ./spec.json', tmpDir);
+    expect(stderr).toContain('duplicate-operation-id');
+  });
+
+  it('exits with a fatal error when --spec points to a missing file', () => {
+    const { code, stderr } = run('lint-spec --spec ./missing.json', tmpDir);
+    expect(code).not.toBe(0);
+    expect(stderr).toMatch(/Could not read --spec file/);
+  });
+});
