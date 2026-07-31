@@ -19,6 +19,7 @@ import { computePatchedDocument } from './patch-spec';
 import { exportSpec } from './export-spec';
 import { readSpecSource } from './read-spec-source';
 import type { OpenApiDocument } from './merge-spec-patch';
+import { buildMockApp } from './mock';
 
 const program = new Command();
 
@@ -742,6 +743,61 @@ program
       );
 
       process.exit(CliExitCode.Ok);
+    } catch (err) {
+      if (err instanceof CliError) {
+        process.stderr.write(`\n${pc.red('✖ Error:')} ${err.message}\n\n`);
+        process.exit(err.exitCode);
+      }
+      if (err instanceof Error) {
+        process.stderr.write(`\n${pc.red('✖ Error:')} ${err.message}\n\n`);
+      } else {
+        process.stderr.write(`\n${pc.red('✖ Unknown error')}\n\n`);
+      }
+      process.exit(CliExitCode.Fatal);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// mock command
+// ---------------------------------------------------------------------------
+
+program
+  .command('mock')
+  .description(
+    'Start a throwaway HTTP server that answers every endpoint in an OpenAPI document with its ' +
+      "generated example response (type-token placeholders, same as 'Copy for AI' — not fake data). " +
+      'No request validation, no auth, no state. For unblocking a frontend against an API that ' +
+      "isn't running yet, not a Swagger UI/Prism replacement.",
+  )
+  .requiredOption(
+    '--spec <path-or-url>',
+    'Path to a local openapi.json, or a URL (e.g. http://localhost:3000/api-json)',
+  )
+  .option('--port <port>', 'Port to listen on', '4010')
+  .option('--host <host>', 'Host to bind to', '127.0.0.1')
+  .option('--root <path>', 'Project root directory', '.')
+  .action(async (rawOpts: Record<string, unknown>) => {
+    try {
+      const root = path.resolve(String(rawOpts.root ?? '.'));
+      const port = Number.parseInt(String(rawOpts.port ?? '4010'), 10);
+      const host = String(rawOpts.host ?? '127.0.0.1');
+
+      header('nestjs-docfy mock');
+      log('info', `Spec: ${String(rawOpts.spec)}`);
+
+      const document: OpenApiDocument = await readSpecSource(String(rawOpts.spec), root);
+      const { app, endpointCount } = await buildMockApp(document);
+
+      const server = app.listen(port, host, () => {
+        log('success', `Mocking ${endpointCount} endpoint(s) at http://${host}:${port}`);
+        log('info', 'Press Ctrl+C to stop.');
+      });
+
+      const shutdown = () => {
+        server.close(() => process.exit(CliExitCode.Ok));
+      };
+      process.on('SIGINT', shutdown);
+      process.on('SIGTERM', shutdown);
     } catch (err) {
       if (err instanceof CliError) {
         process.stderr.write(`\n${pc.red('✖ Error:')} ${err.message}\n\n`);
