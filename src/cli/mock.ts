@@ -1,6 +1,6 @@
 import express from 'express';
-import { buildSchemaExample, normalizeDocument, pickPrimarySuccessResponse } from 'docfy-core';
-import type { DocumentModel, Endpoint } from 'docfy-core';
+import { buildSchemaExample, normalizeDocument, pickPrimarySuccessResponse, uniqueEndpoints } from 'docfy-core';
+import type { Endpoint } from 'docfy-core';
 import type { OpenApiDocument } from './merge-spec-patch';
 
 const EXPRESS_METHODS = ['get', 'put', 'post', 'delete', 'patch', 'options', 'head'] as const;
@@ -9,19 +9,6 @@ type ExpressMethod = (typeof EXPRESS_METHODS)[number];
 /** `/users/{id}` (OpenAPI) → `/users/:id` (Express route syntax). */
 function toExpressPath(openApiPath: string): string {
   return openApiPath.replace(/\{([^}]+)\}/g, ':$1');
-}
-
-/** An endpoint with multiple `tags` appears once per tag group in `document.tagGroups` (by
- * design — see `normalize.ts`) — deduplicated here by `method path` so each route is
- * registered, and counted, exactly once. */
-function uniqueEndpoints(document: DocumentModel): Endpoint[] {
-  const byKey = new Map<string, Endpoint>();
-  for (const group of document.tagGroups) {
-    for (const endpoint of group.endpoints) {
-      byKey.set(`${endpoint.method} ${endpoint.path}`, endpoint);
-    }
-  }
-  return [...byKey.values()];
 }
 
 type ExpressRouteHandler = (req: express.Request, res: express.Response) => void;

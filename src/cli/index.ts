@@ -20,6 +20,7 @@ import { exportSpec } from './export-spec';
 import { readSpecSource } from './read-spec-source';
 import type { OpenApiDocument } from './merge-spec-patch';
 import { buildMockApp } from './mock';
+import { runContractTests } from './contract-test';
 
 const program = new Command();
 
@@ -799,6 +800,121 @@ program
       process.on('SIGINT', shutdown);
       process.on('SIGTERM', shutdown);
     } catch (err) {
+      if (err instanceof CliError) {
+        process.stderr.write(`\n${pc.red('✖ Error:')} ${err.message}\n\n`);
+        process.exit(err.exitCode);
+      }
+      if (err instanceof Error) {
+        process.stderr.write(`\n${pc.red('✖ Error:')} ${err.message}\n\n`);
+      } else {
+        process.stderr.write(`\n${pc.red('✖ Unknown error')}\n\n`);
+      }
+      process.exit(CliExitCode.Fatal);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// test command
+// ---------------------------------------------------------------------------
+
+program
+  .command('test')
+  .description(
+    'Fire a real request at every endpoint in an OpenAPI document (path/query/body filled in ' +
+      'with generated examples) and validate the live response against its declared schema — a ' +
+      'Postman-collection-runner-equivalent driven straight off the spec, no setup required. A ' +
+      'response whose status is undeclared, or declared with no schema, is reported but never ' +
+      "counted as a failure — a fabricated ID legitimately 404ing isn't a contract break.",
+  )
+  .requiredOption(
+    '--spec <path-or-url>',
+    'Path to a local openapi.json, or a URL (e.g. http://localhost:3000/api-json)',
+  )
+  .requiredOption('--base-url <url>', 'Base URL of the running server to test against')
+  .option(
+    '--header <name:value>',
+    'Extra header sent with every request (e.g. --header "Authorization:Bearer xyz"), repeatable',
+    (value: string, previous: string[]) => previous.concat([value]),
+    [] as string[],
+  )
+  .option('--root <path>', 'Project root directory', '.')
+  .option('--json', 'Output a single machine-readable JSON object instead of formatted text', false)
+  .option('--quiet', 'Suppress all output except errors', false)
+  .action(async (rawOpts: Record<string, unknown>) => {
+    const json = Boolean(rawOpts.json);
+    try {
+      const root = path.resolve(String(rawOpts.root ?? '.'));
+      setQuiet(json || Boolean(rawOpts.quiet));
+
+      if (!json) {
+        header('nestjs-docfy test');
+        log('info', `Spec: ${String(rawOpts.spec)}`);
+        log('info', `Base URL: ${String(rawOpts.baseUrl)}`);
+      }
+
+      const headers: Record<string, string> = {};
+      for (const raw of (rawOpts.header as string[] | undefined) ?? []) {
+        const separatorIndex = raw.indexOf(':');
+        if (separatorIndex === -1) continue;
+        headers[raw.slice(0, separatorIndex).trim()] = raw.slice(separatorIndex + 1).trim();
+      }
+
+      const document: OpenApiDocument = await readSpecSource(String(rawOpts.spec), root);
+      const results = await runContractTests(document, { baseUrl: String(rawOpts.baseUrl), headers });
+
+      const mismatched = results.filter((r) => r.outcome.kind === 'matched' && r.outcome.mismatches.length > 0);
+      const requestFailed = results.filter((r) => r.outcome.kind === 'request-failed');
+      const passed = mismatched.length === 0 && requestFailed.length === 0;
+
+      if (json) {
+        process.stdout.write(`${JSON.stringify({ endpointsTested: results.length, results, passed })}\n`);
+        process.exit(passed ? CliExitCode.Ok : CliExitCode.PartialError);
+        return;
+      }
+
+      const cleanMatches = results.filter((r) => r.outcome.kind === 'matched' && r.outcome.mismatches.length === 0);
+      const undeclaredStatus = results.filter((r) => r.outcome.kind === 'undeclared-status');
+      const noSchema = results.filter((r) => r.outcome.kind === 'no-schema');
+      const unparseable = results.filter((r) => r.outcome.kind === 'unparseable-body');
+
+      if (cleanMatches.length > 0) log('success', `${cleanMatches.length} endpoint(s) matched their schema cleanly.`);
+      if (noSchema.length > 0)
+        log('info', `${noSchema.length} endpoint(s) had no schema declared for the live status — nothing to check.`);
+      if (undeclaredStatus.length > 0) {
+        log(
+          'warn',
+          `${undeclaredStatus.length} endpoint(s) returned a status not declared in the spec (informational, not a failure).`,
+        );
+      }
+      if (unparseable.length > 0)
+        log('warn', `${unparseable.length} endpoint(s) returned a non-JSON body for a status with a declared schema.`);
+
+      for (const result of requestFailed) {
+        if (result.outcome.kind !== 'request-failed') continue;
+        log('error', `${result.method} ${result.path}: request failed — ${result.outcome.message}`);
+      }
+
+      for (const result of mismatched) {
+        if (result.outcome.kind !== 'matched') continue;
+        log('error', `${result.method} ${result.path}: ${result.outcome.mismatches.length} schema mismatch(es)`);
+        for (const mismatch of result.outcome.mismatches) {
+          log('info', `  → ${mismatch.path}: ${mismatch.message}`);
+        }
+      }
+
+      if (passed) {
+        process.exit(CliExitCode.Ok);
+      } else {
+        process.stderr.write(
+          `\n${pc.red(`✖ ${mismatched.length} endpoint(s) with schema mismatches, ${requestFailed.length} request failure(s).`)}\n\n`,
+        );
+        process.exit(CliExitCode.PartialError);
+      }
+    } catch (err) {
+      if (json && err instanceof CliError) {
+        process.stdout.write(`${JSON.stringify({ error: err.message })}\n`);
+        process.exit(err.exitCode);
+      }
       if (err instanceof CliError) {
         process.stderr.write(`\n${pc.red('✖ Error:')} ${err.message}\n\n`);
         process.exit(err.exitCode);
