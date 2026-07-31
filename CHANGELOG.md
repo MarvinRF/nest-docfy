@@ -1,3 +1,12 @@
+# [0.11.0](https://github.com/MarvinRF/nest-docfy/compare/v0.10.0...v0.11.0) (2026-07-31)
+
+
+### Features
+
+* **cli:** add `mock` command — throwaway HTTP server from an OpenAPI doc ([c5ea612](https://github.com/MarvinRF/nest-docfy/commit/c5ea612388ab85f9d88ba97a40d75189ef8c0445))
+* **cli:** add `test` command — contract testing straight off the spec ([71f2e75](https://github.com/MarvinRF/nest-docfy/commit/71f2e7553c4f46afd9860684974cdc6ea8fbe796))
+* serve llms.txt/llms-full.txt from DocfyUiModule.setup() ([30375d9](https://github.com/MarvinRF/nest-docfy/commit/30375d9da5b44fb5980e6c3e4dd19dfc472fffc8))
+
 # [0.10.0](https://github.com/MarvinRF/nest-docfy/compare/v0.9.1...v0.10.0) (2026-07-30)
 
 
