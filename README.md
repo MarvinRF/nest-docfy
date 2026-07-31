@@ -31,6 +31,8 @@ Keep your NestJS controllers clean. Swagger documentation lives in a dedicated c
 - [CLI: lint](#cli-lint)
 - [CLI: patch-spec](#cli-patch-spec)
 - [CLI: generate-client](#cli-generate-client)
+- [CLI: mock](#cli-mock)
+- [CLI: test](#cli-test)
 - [GitHub Actions: PR check](#github-actions-pr-check)
 - [API reference](#api-reference)
   - [DocfyModule.forRoot()](#docfymoduleforrootoptions)
@@ -540,6 +542,62 @@ const { data, error } = await api.GET('/users/{id}', { params: { path: { id: '12
 
 `openapi-fetch` is **not** a dependency of `nestjs-docfy` itself, since only the generated `client.ts` imports it, so install it in your own project: `npm install openapi-fetch`.
 
+## CLI: mock
+
+Starts a throwaway HTTP server that answers every endpoint in an OpenAPI document with its generated example response — the same deterministic, type-token example (`"name": "string"`) `buildSchemaExample()` already produces for "Copy for AI", never fake-but-plausible data. Unblocks a frontend against an API that isn't running yet, no export/import step needed.
+
+```bash
+npx nestjs-docfy mock --spec <path-or-url> [options]
+```
+
+| Option               | Default      | Description                                                         |
+| -------------------- | ------------ | ------------------------------------------------------------------- |
+| `--spec <path\|url>` | _(required)_ | A local `openapi.json`, or a URL (e.g. a running app's `/api-json`) |
+| `--port <port>`      | `4010`       | Port to listen on                                                   |
+| `--host <host>`      | `127.0.0.1`  | Host to bind to                                                     |
+| `--root <path>`      | `.`          | Project root directory                                              |
+
+```bash
+npx nestjs-docfy mock --spec ./openapi.json --port 4010
+# Mocking 12 endpoint(s) at http://127.0.0.1:4010
+```
+
+`{param}` path segments are converted to Express `:param` routes and resolved automatically; an endpoint declared under multiple `tags` is only registered once. No request validation, no auth, no state — a `POST` never affects what a later `GET` returns. Not a Prism/Swagger UI replacement, just enough to unblock frontend work.
+
+## CLI: test
+
+Fires a real request at every endpoint in an OpenAPI document (path/query params and the request body filled in with the same generated examples `mock` uses) and validates the live response against its declared schema — a Postman-collection-runner-equivalent driven straight off the spec, zero setup.
+
+```bash
+npx nestjs-docfy test --spec <path-or-url> --base-url <url> [options]
+```
+
+| Option                  | Default      | Description                                                            |
+| ----------------------- | ------------ | ---------------------------------------------------------------------- |
+| `--spec <path\|url>`    | _(required)_ | A local `openapi.json`, or a URL (e.g. a running app's `/api-json`)    |
+| `--base-url <url>`      | _(required)_ | Base URL of the running server to test against                         |
+| `--header <name:value>` | —            | Extra header sent with every request (e.g. auth), repeatable           |
+| `--root <path>`         | `.`          | Project root directory                                                 |
+| `--json`                | `false`      | Output a single machine-readable JSON object instead of formatted text |
+| `--quiet`               | `false`      | Suppress all output except errors                                      |
+
+```bash
+npx nestjs-docfy test --spec ./openapi.json --base-url http://localhost:3000 --header "Authorization:Bearer xyz"
+```
+
+```text
+✔ 8 endpoint(s) matched their schema cleanly.
+ℹ 2 endpoint(s) had no schema declared for the live status — nothing to check.
+⚠ 1 endpoint(s) returned a status not declared in the spec (informational, not a failure).
+```
+
+A response whose status isn't declared in the spec at all, or is declared with no schema, is reported but **never** counted as a failure — a fabricated ID legitimately 404ing isn't a contract break, and there's nothing to structurally check against for a schema-less response. Only real schema mismatches (missing/renamed field, wrong type — via `docfy-core`'s `validateAgainstSchema()`) and request failures (server unreachable) affect the exit code, so this is safe to wire into CI:
+
+```bash
+npx nestjs-docfy test --spec ./openapi.json --base-url http://localhost:3000 --json
+# exits 1 if any endpoint has a schema mismatch or a request failure, 0 otherwise
+```
+
 ## GitHub Actions: PR check
 
 A reusable workflow that runs `check`/`coverage` — and, when given an [export entry file](#cli-export), a breaking-change spec diff against the PR's base commit — and posts (and updates, never spams) a single summary comment on the PR.
@@ -667,12 +725,13 @@ await app.listen(3000);
 
 Visit `/docs`: no further configuration needed, since `docfy-ui` fetches `/api-json` same-origin by default.
 
-| Option                   | Type                              | Default | Description                                                                                                                            |
-| ------------------------ | --------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------- |
-| `staticSpecPath`         | `string`                          | —       | Path to a pre-built OpenAPI JSON file, served at `/api-json` _instead of_ the app's live one.                                          |
-| `specs`                  | `{ name: string; url: string }[]` | —       | Extra OpenAPI specs to offer in `docfy-ui`'s spec switcher, so one deployed instance can browse more than one service's documentation. |
-| `openApiDocument`        | `{ servers?: { url: string }[] }` | —       | Enables the "Try it out" same-origin proxy — pass the same object you already have from `SwaggerModule.createDocument()`. See below.   |
-| `additionalProxyOrigins` | `string[]`                        | —       | Extra origins the proxy is allowed to forward requests to, beyond what `openApiDocument.servers` declares.                             |
+| Option                   | Type                                         | Default | Description                                                                                                                            |
+| ------------------------ | -------------------------------------------- | ------- | -------------------------------------------------------------------------------------------------------------------------------------- |
+| `staticSpecPath`         | `string`                                     | —       | Path to a pre-built OpenAPI JSON file, served at `/api-json` _instead of_ the app's live one.                                          |
+| `specs`                  | `{ name: string; url: string }[]`            | —       | Extra OpenAPI specs to offer in `docfy-ui`'s spec switcher, so one deployed instance can browse more than one service's documentation. |
+| `openApiDocument`        | `{ servers?: { url: string }[] }`            | —       | Enables the "Try it out" same-origin proxy — pass the same object you already have from `SwaggerModule.createDocument()`. See below.   |
+| `additionalProxyOrigins` | `string[]`                                   | —       | Extra origins the proxy is allowed to forward requests to, beyond what `openApiDocument.servers` declares.                             |
+| `llmsTxt`                | `true \| { document, title?, description? }` | —       | Serves `llms.txt`/`llms-full.txt` at `mountPath`. See below.                                                                           |
 
 **`staticSpecPath`: needed if your app builds with `"webpack": true`, and you're not using the [CLI plugin](#webpack-true-build-mode).** `DocfyModule`'s runtime metadata pipeline cannot apply docs files there, so the live `/api-json` will be missing everything docs files would otherwise add. Generate a patched document ahead of time:
 
@@ -703,6 +762,28 @@ DocfyUiModule.setup('/docs', app, { openApiDocument: document });
 The proxy's allowlist is built **only** from absolute URLs in the OpenAPI document's `servers[]` array (plus anything in `additionalProxyOrigins`) — a request for any other origin gets rejected with `403` and an `X-Docfy-Proxy-Error: origin_not_allowed` response header. There is deliberately no implicit "same origin as this request" fallback: that would have to be derived from client-controlled request headers (`Host`), which is a classic SSRF vector — someone hitting the proxy endpoint directly (not through a browser, no CORS involved) could forge it to reach an internal-only origin. Declare `servers[]` in your `DocumentBuilder` config to opt an origin in; without any absolute `servers[]` entry, the route exists but always returns `403`.
 
 Every other proxy failure (target unreachable, timeout) also sets `X-Docfy-Proxy-Error`, so `docfy-ui` can tell a proxy-level failure apart from a real `4xx`/`5xx` response coming from your API — those pass through untouched, with their real status/headers/body.
+
+**`llmsTxt`: opt-in, serves `llms.txt`/`llms-full.txt` at `mountPath`** (the [llmstxt.org](https://llmstxt.org) convention) — lets an agent discover the API's endpoints with a plain `curl`/`fetch`, no MCP server required. `llms.txt` lists one bullet per endpoint (linking to its `docfy-ui` page); `llms-full.txt` expands each into its full "Copy for AI" text, the same content [`docfy-mcp`](../docfy-mcp)'s `get_endpoint` tool returns. Never registered unless this option is set.
+
+```ts
+// Reuses the already-loaded staticSpecPath document — requires that option too
+DocfyUiModule.setup('/docs', app, { staticSpecPath: './openapi.patched.json', llmsTxt: true });
+
+// Or pass a live SwaggerModule-produced spec explicitly
+const document = SwaggerModule.createDocument(app, new DocumentBuilder().build());
+DocfyUiModule.setup('/docs', app, { llmsTxt: { document } });
+```
+
+Visiting `/docs/llms.txt` then returns something like:
+
+```text
+# My API
+
+## Users
+- [GET /users](/docs/Users/listUsers): List all users
+```
+
+`title`/`description` default to the spec's own `info.title`/`info.description`, overridable via `llmsTxt: { document, title, description }`.
 
 ## Interface-typed DTOs
 
