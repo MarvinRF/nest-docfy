@@ -238,6 +238,89 @@ describe('E2E — --link-controller', () => {
 });
 
 // ---------------------------------------------------------------------------
+// init
+// Each test gets its own fixture copy — mutates app.module.ts, the
+// controller, and package.json, so sharing one ROOT across tests would leak
+// state between them (same reasoning as the --link-controller block above).
+// ---------------------------------------------------------------------------
+describe('E2E — init', () => {
+  function freshInitProject(): {
+    root: string;
+    appModulePath: string;
+    controllerPath: string;
+    packageJsonPath: string;
+  } {
+    const root = isolatedFixture('init');
+    return {
+      root,
+      appModulePath: path.join(root, 'src/app.module.ts'),
+      controllerPath: path.join(root, 'src/users/users.controller.ts'),
+      packageJsonPath: path.join(root, 'package.json'),
+    };
+  }
+
+  it('wires DocfyModule, decorates the controller, generates docs, and adds package.json scripts', () => {
+    const { root, appModulePath, controllerPath, packageJsonPath } = freshInitProject();
+    const { code, stdout } = run(`init --root "${root}"`);
+    expect(code).toBe(0);
+    expect(stdout).toContain('DocfyModule.forRoot()');
+    expect(stdout).toContain('@WithDocs()');
+
+    const appModule = fs.readFileSync(appModulePath, 'utf8');
+    expect(appModule).toContain("import { DocfyModule } from 'nestjs-docfy';");
+    expect(appModule).toContain('imports: [DocfyModule.forRoot(), UsersModule]');
+
+    const controller = fs.readFileSync(controllerPath, 'utf8');
+    expect(controller).toContain("import { WithDocs } from 'nestjs-docfy';");
+    expect(controller).toMatch(/@WithDocs\(\)\s*\n@Controller\('users'\)/);
+
+    const docsFile = path.join(root, 'src/users/users.controller.docs.ts');
+    expect(fs.existsSync(docsFile)).toBe(true);
+
+    const pkg = JSON.parse(fs.readFileSync(packageJsonPath, 'utf8'));
+    expect(pkg.scripts).toMatchObject({
+      build: 'tsc',
+      'docs:generate': 'nestjs-docfy generate',
+      'docs:preview': 'nestjs-docfy generate --dry-run',
+    });
+  });
+
+  it('is idempotent: a second run makes no further changes', () => {
+    const { root, appModulePath, controllerPath, packageJsonPath } = freshInitProject();
+    run(`init --root "${root}"`);
+    const appModuleBefore = fs.readFileSync(appModulePath, 'utf8');
+    const controllerBefore = fs.readFileSync(controllerPath, 'utf8');
+    const packageJsonBefore = fs.readFileSync(packageJsonPath, 'utf8');
+
+    const { code, stdout } = run(`init --root "${root}"`);
+    expect(code).toBe(0);
+    expect(stdout).toContain('root module already wired');
+    expect(stdout).toContain('already linked');
+    expect(stdout).toContain('already present');
+
+    expect(fs.readFileSync(appModulePath, 'utf8')).toBe(appModuleBefore);
+    expect(fs.readFileSync(controllerPath, 'utf8')).toBe(controllerBefore);
+    expect(fs.readFileSync(packageJsonPath, 'utf8')).toBe(packageJsonBefore);
+  });
+
+  it('--dry-run leaves every file untouched', () => {
+    const { root, appModulePath, controllerPath, packageJsonPath } = freshInitProject();
+    const appModuleBefore = fs.readFileSync(appModulePath, 'utf8');
+    const controllerBefore = fs.readFileSync(controllerPath, 'utf8');
+    const packageJsonBefore = fs.readFileSync(packageJsonPath, 'utf8');
+
+    const { code, stdout } = run(`init --root "${root}" --dry-run`);
+    expect(code).toBe(0);
+    expect(stdout).toContain('would be added');
+
+    expect(fs.readFileSync(appModulePath, 'utf8')).toBe(appModuleBefore);
+    expect(fs.readFileSync(controllerPath, 'utf8')).toBe(controllerBefore);
+    expect(fs.readFileSync(packageJsonPath, 'utf8')).toBe(packageJsonBefore);
+    expect(fs.existsSync(path.join(root, 'src/users/users.controller.docs.ts'))).toBe(false);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // check --json / coverage --json
 // A dedicated, single-controller fixture (not `scan`, which deliberately
 // has a two-controllers-sharing-one-docs-file edge case that makes

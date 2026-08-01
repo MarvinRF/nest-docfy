@@ -25,6 +25,11 @@ describe('detectProject() — simple project', () => {
     const ctx = detectProject(fix('simple'));
     expect(ctx.apps[0].root).toBe(fix('simple'));
   });
+
+  it('resolves entryFile to src/main.ts when it exists', () => {
+    const ctx = detectProject(fix('simple'));
+    expect(ctx.apps[0].entryFile).toBe(path.join(fix('simple'), 'src/main.ts'));
+  });
 });
 
 describe('detectProject() — NX monorepo', () => {
@@ -58,6 +63,18 @@ describe('detectProject() — NX monorepo', () => {
       expect(app.root.startsWith(root) || app.root === fix('nx')).toBe(true);
     }
   });
+
+  it('resolves entryFile from the build target main option when present', () => {
+    const ctx = detectProject(fix('nx'));
+    const api = ctx.apps.find((a) => a.name === 'api')!;
+    expect(api.entryFile).toBe(path.join(fix('nx'), 'apps/api/src/main.ts'));
+  });
+
+  it('leaves entryFile undefined when neither the main option nor the src/main.ts fallback exists', () => {
+    const ctx = detectProject(fix('nx'));
+    const worker = ctx.apps.find((a) => a.name === 'worker')!;
+    expect(worker.entryFile).toBeUndefined();
+  });
 });
 
 describe('detectProject() — Nest CLI monorepo', () => {
@@ -83,6 +100,18 @@ describe('detectProject() — Nest CLI monorepo', () => {
     const admin = ctx.apps.find((a) => a.name === 'admin')!;
     expect(admin.tsconfig).toBe(path.join(fix('nest-cli'), 'apps/admin/tsconfig.build.json'));
   });
+
+  it('resolves entryFile to src/main.ts (Nest CLI default) when entryFile is not set in nest-cli.json', () => {
+    const ctx = detectProject(fix('nest-cli'));
+    const api = ctx.apps.find((a) => a.name === 'api')!;
+    expect(api.entryFile).toBe(path.join(fix('nest-cli'), 'apps/api/src/main.ts'));
+  });
+
+  it('leaves entryFile undefined when src/main.ts does not exist', () => {
+    const ctx = detectProject(fix('nest-cli'));
+    const admin = ctx.apps.find((a) => a.name === 'admin')!;
+    expect(admin.entryFile).toBeUndefined();
+  });
 });
 
 describe('detectProject() — generic monorepo', () => {
@@ -95,6 +124,14 @@ describe('detectProject() — generic monorepo', () => {
     const ctx = detectProject(fix('generic'));
     const names = ctx.apps.map((a) => a.name).sort();
     expect(names).toEqual(['service-a', 'service-b']);
+  });
+
+  it('resolves entryFile to src/main.ts when it exists, leaves it undefined otherwise', () => {
+    const ctx = detectProject(fix('generic'));
+    const serviceA = ctx.apps.find((a) => a.name === 'service-a')!;
+    const serviceB = ctx.apps.find((a) => a.name === 'service-b')!;
+    expect(serviceA.entryFile).toBe(path.join(fix('generic'), 'packages/service-a/src/main.ts'));
+    expect(serviceB.entryFile).toBeUndefined();
   });
 
   it('all app roots are inside the project root', () => {

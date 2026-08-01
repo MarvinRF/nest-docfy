@@ -22,6 +22,7 @@ Keep your NestJS controllers clean. Swagger documentation lives in a dedicated c
   - [2. Mark your controllers](#2-mark-your-controllers)
   - [3. Generate companion docs files](#3-generate-companion-docs-files)
   - [4. Fill in the docs file](#4-fill-in-the-docs-file)
+- [CLI: init](#cli-init)
 - [CLI: generate](#cli-generate)
   - [Options](#options)
   - [Project types](#project-types)
@@ -133,6 +134,8 @@ npm install @nestjs/common @nestjs/swagger reflect-metadata
 
 ## Quick start
 
+Fastest path: run `npx nestjs-docfy init` once — it wires `DocfyModule.forRoot()` into your root module, decorates every controller with `@WithDocs()`, registers the webpack CLI plugin if needed, adds `docs:generate`/`docs:preview` scripts to `package.json`, and generates the companion docs files, all in one shot (see [CLI: init](#cli-init)). The steps below are what it automates, useful if you want to do any of them by hand instead.
+
 ### 1. Import DocfyModule
 
 ```ts
@@ -223,6 +226,29 @@ docs(UsersController, {
 Edit the file freely; your changes are safe. Running `generate` again will skip existing files. Use `--force` to merge only **new** methods without touching existing ones, or `--overwrite` to discard the file entirely and regenerate it from scratch (e.g. after a `nestjs-docfy` upgrade that changed how a type maps to schema — `check` warns when a docs file predates the installed version).
 
 No changes to `main.ts` are needed. `DocfyModule` applies all metadata before `SwaggerModule.createDocument()` is called.
+
+## CLI: init
+
+```bash
+npx nestjs-docfy init [options]
+```
+
+One-shot onboarding — bundles the whole Quick start above into a single command, for every app the project detects:
+
+1. Locates each app's bootstrap file (`main.ts`, resolved the same way `generate` detects apps — simple projects, Nx, Nest CLI monorepos, and generic monorepos) and the class passed to `NestFactory.create(...)`, then wires `DocfyModule.forRoot()` into that root module's `@Module({ imports: [...] })`. Static analysis only, same as everything else in this CLI — never executes your code. If the bootstrap file or the module can't be located with certainty (a dynamic `NestFactory.create(...)` argument, a non-standard `@Module(...)` shape), it warns and skips that app instead of guessing; add `DocfyModule.forRoot()` by hand in that case.
+2. Runs the same steps as `generate --link-controller --register-plugin`: decorates every controller with `@WithDocs()`, registers the webpack CLI plugin if `webpack: true` is set without it, and generates the companion `*.controller.docs.ts` files.
+3. Adds `docs:generate`/`docs:preview` scripts to the root `package.json`, without overwriting any script you already defined under those names.
+
+Every step is independently idempotent (each one detects "already done" and skips), so running `init` again is always safe — useful after adding a new controller or a second app to the project.
+
+| Option              | Default              | Description                                       |
+| ------------------- | -------------------- | ------------------------------------------------- |
+| `--root <path>`     | `.`                  | Project root directory                            |
+| `--tsconfig <path>` | auto-detected        | Path to `tsconfig.json`                           |
+| `--pattern <glob>`  | `**/*.controller.ts` | Glob pattern to find controllers                  |
+| `--format`          | `ts`                 | Output format: `ts` or `js`                       |
+| `--dry-run`         | `false`              | Print what would change without writing any files |
+| `--quiet`           | `false`              | Suppress all output except errors                 |
 
 ## CLI: generate
 

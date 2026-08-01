@@ -9,6 +9,8 @@ export interface ProjectApp {
   tsconfig: string;
   /** Glob pattern to find controllers within this app */
   controllerGlob: string;
+  /** Absolute path to the app's bootstrap file (main.ts), when it could be resolved. */
+  entryFile?: string;
 }
 
 export interface ProjectContext {

@@ -54,6 +54,15 @@ function findTsconfig(appRoot: string, projectRoot: string): string {
 // Strategy: simple project
 // ---------------------------------------------------------------------------
 
+function findEntryFile(candidate: string, projectRoot: string): string | undefined {
+  try {
+    assertWithinRoot(candidate, projectRoot);
+  } catch {
+    return undefined;
+  }
+  return exists(candidate) ? candidate : undefined;
+}
+
 function detectSimple(root: string, tsconfigOverride?: string): ProjectContext {
   const tsconfig = tsconfigOverride ?? findTsconfig(root, root);
   return {
@@ -65,6 +74,7 @@ function detectSimple(root: string, tsconfigOverride?: string): ProjectContext {
         root,
         tsconfig,
         controllerGlob: '**/*.controller.ts',
+        entryFile: findEntryFile(path.join(root, 'src/main.ts'), root),
       },
     ],
   };
@@ -151,11 +161,17 @@ function detectNx(root: string, tsconfigOverride?: string): ProjectContext {
         }
       }
 
+      const mainOption = projectJson.targets?.build?.options?.main;
+      const entryFile = mainOption
+        ? findEntryFile(path.resolve(root, mainOption), root)
+        : findEntryFile(path.join(appRoot, 'src/main.ts'), root);
+
       apps.push({
         name: projectJson.name ?? entry,
         root: appRoot,
         tsconfig,
         controllerGlob: '**/*.controller.ts',
+        entryFile,
       });
     }
   }
@@ -178,7 +194,13 @@ function detectNx(root: string, tsconfigOverride?: string): ProjectContext {
         } catch {
           continue;
         }
-        apps.push({ name, root: appRoot, tsconfig, controllerGlob: '**/*.controller.ts' });
+        apps.push({
+          name,
+          root: appRoot,
+          tsconfig,
+          controllerGlob: '**/*.controller.ts',
+          entryFile: findEntryFile(path.join(appRoot, 'src/main.ts'), root),
+        });
       }
     }
   }
@@ -247,6 +269,7 @@ function detectNestCliMonorepo(root: string, nestCliJson: NestCliJson, tsconfigO
       root: appRoot,
       tsconfig,
       controllerGlob: '**/*.controller.ts',
+      entryFile: findEntryFile(path.join(appRoot, `${config.entryFile ?? 'src/main'}.ts`), root),
     });
   }
 
@@ -305,6 +328,7 @@ function detectGenericMonorepo(root: string, tsconfigOverride?: string): Project
         root: appRoot,
         tsconfig,
         controllerGlob: '**/*.controller.ts',
+        entryFile: findEntryFile(path.join(appRoot, 'src/main.ts'), root),
       });
     }
   }

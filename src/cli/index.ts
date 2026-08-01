@@ -2,6 +2,7 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { Command } from 'commander';
+import { Project } from 'ts-morph';
 import pc from 'picocolors';
 import { parseAndValidateOptions, resolveAndValidate, type CliOptions } from './parse-args';
 import { setQuiet, log, header, summary } from './logger';
@@ -9,6 +10,9 @@ import { CliError, CliExitCode } from './errors';
 import { detectProject, hasWebpackWithoutPlugin } from './detect-project';
 import { registerWebpackPlugin } from './register-webpack-plugin';
 import { linkController } from './link-controller';
+import { findRootModule } from './find-root-module';
+import { linkRootModule } from './link-root-module';
+import { addPackageScripts } from './add-package-scripts';
 import { scanAllApps } from './scan-controllers';
 import { writeAllDocs } from './writer';
 import { watchProject } from './watch';
@@ -251,6 +255,133 @@ program
       };
       process.on('SIGINT', shutdown);
       process.on('SIGTERM', shutdown);
+    } catch (err) {
+      if (err instanceof CliError) {
+        process.stderr.write(`\n${pc.red('✖ Error:')} ${err.message}\n\n`);
+        process.exit(err.exitCode);
+      }
+      if (err instanceof Error) {
+        process.stderr.write(`\n${pc.red('✖ Error:')} ${err.message}\n\n`);
+      } else {
+        process.stderr.write(`\n${pc.red('✖ Unknown error')}\n\n`);
+      }
+      process.exit(CliExitCode.Fatal);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// init command — one-shot onboarding, bundles what generate/--link-controller/
+// --register-plugin already do plus the one genuinely new step: wiring
+// DocfyModule.forRoot() into each app's root module.
+// ---------------------------------------------------------------------------
+
+program
+  .command('init')
+  .description(
+    'One-shot onboarding: wire DocfyModule into the root module, decorate controllers, register the webpack plugin if needed, add package.json scripts, and generate companion docs files',
+  )
+  .option('--root <path>', 'Project root directory', '.')
+  .option('--tsconfig <path>', 'Path to tsconfig.json (auto-detected if omitted)')
+  .option('--pattern <glob>', 'Glob pattern to find controllers', '**/*.controller.ts')
+  .option('--format <format>', 'Output format: ts or js', 'ts')
+  .option('--dry-run', 'Print what would change without writing any files', false)
+  .option('--quiet', 'Suppress all output except errors', false)
+  .action(async (rawOpts: Record<string, unknown>) => {
+    try {
+      const options = parseAndValidateOptions({
+        ...rawOpts,
+        out: undefined,
+        force: false,
+        overwrite: false,
+        watch: false,
+        registerPlugin: true,
+        linkController: true,
+      } as Parameters<typeof parseAndValidateOptions>[0]);
+      setQuiet(options.quiet);
+
+      if (options.dryRun) {
+        header(`${pc.cyan('[DRY RUN]')} nestjs-docfy init`);
+      } else {
+        header('nestjs-docfy init');
+      }
+      log('info', `Root: ${options.root}`);
+
+      // Own detection pass just to get each app's entryFile for root-module
+      // wiring below — runPipeline() re-detects internally right after (it
+      // owns the "Project type" log + the actual --register-plugin write,
+      // both gated together behind its `silent` param, so this can't reuse
+      // that call without also silencing the plugin registration).
+      const context = detectProject(options.root, options.tsconfig);
+
+      for (const app of context.apps) {
+        if (!app.entryFile) {
+          log(
+            'warn',
+            `${app.name}: could not locate a bootstrap file (src/main.ts) — add ${pc.cyan('DocfyModule.forRoot()')} to your root module manually.`,
+          );
+          continue;
+        }
+
+        let rootProject: Project;
+        try {
+          rootProject = new Project({
+            tsConfigFilePath: app.tsconfig,
+            skipAddingFilesFromTsConfig: false,
+            skipFileDependencyResolution: true,
+          });
+        } catch {
+          log(
+            'warn',
+            `${app.name}: could not load ${app.tsconfig} to locate the root module — add DocfyModule.forRoot() manually.`,
+          );
+          continue;
+        }
+
+        const location = findRootModule(rootProject, app.entryFile);
+        if (!location) {
+          log(
+            'warn',
+            `${app.name}: could not locate the root module from ${app.entryFile} — add ${pc.cyan('DocfyModule.forRoot()')} to your root module manually.`,
+          );
+          continue;
+        }
+
+        const result = linkRootModule(location, options.dryRun);
+        if (!result) {
+          log(
+            'warn',
+            `${app.name}: found the root module but couldn't safely edit its @Module({...}) — add ${pc.cyan('DocfyModule.forRoot()')} manually.`,
+          );
+          continue;
+        }
+
+        if (result.changed) {
+          log(
+            options.dryRun ? 'dry' : 'success',
+            `${app.name} → ${pc.cyan('DocfyModule.forRoot()')} ${options.dryRun ? 'would be added' : 'added'} to ${result.path}`,
+          );
+        } else {
+          log('skip', `${app.name} → ${pc.gray('[root module already wired]')}`);
+        }
+      }
+
+      // Controllers (--link-controller), webpack plugin (--register-plugin),
+      // and companion docs files (generate) — all already implemented.
+      const errors = runPipeline(options);
+
+      const scriptsResult = addPackageScripts(context.root, options.dryRun);
+      if (!scriptsResult) {
+        log('warn', 'Could not find/parse package.json — add "docs:generate"/"docs:preview" scripts manually.');
+      } else if (scriptsResult.changed) {
+        log(
+          options.dryRun ? 'dry' : 'success',
+          `${options.dryRun ? 'Would add' : 'Added'} script(s) ${scriptsResult.added.map((s) => pc.cyan(s)).join(', ')} to ${scriptsResult.path}`,
+        );
+      } else {
+        log('skip', `package.json scripts ${pc.gray('[already present]')}`);
+      }
+
+      process.exit(errors > 0 ? CliExitCode.PartialError : CliExitCode.Ok);
     } catch (err) {
       if (err instanceof CliError) {
         process.stderr.write(`\n${pc.red('✖ Error:')} ${err.message}\n\n`);
