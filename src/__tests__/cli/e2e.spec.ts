@@ -183,6 +183,61 @@ describe('E2E — simple project', () => {
 });
 
 // ---------------------------------------------------------------------------
+// --link-controller
+// ---------------------------------------------------------------------------
+describe('E2E — --link-controller', () => {
+  // Each test gets its own fixture copy — unlike the read-mostly .docs.ts
+  // assertions elsewhere in this file, these tests mutate the controller
+  // .ts source itself, so sharing one ROOT across tests would leak state
+  // between them (e.g. a later "dry-run" assertion seeing an
+  // already-linked controller from an earlier test).
+  function freshUsersController(): { root: string; controllerPath: string } {
+    const root = isolatedFixture('scan');
+    return { root, controllerPath: path.join(root, 'src/users/users.controller.ts') };
+  }
+
+  it('inserts the import and @WithDocs() into the controller', () => {
+    const { root, controllerPath } = freshUsersController();
+    const { code, stdout } = run(`generate --root "${root}" --link-controller`);
+    expect(code).toBe(0);
+    expect(stdout).toContain('@WithDocs()');
+
+    const content = fs.readFileSync(controllerPath, 'utf8');
+    expect(content).toContain("import { WithDocs } from 'nestjs-docfy';");
+    expect(content).toMatch(/@WithDocs\(\)\s*\n@Controller\('users'\)/);
+  });
+
+  it('is idempotent: a second run makes no further changes', () => {
+    const { root, controllerPath } = freshUsersController();
+    run(`generate --root "${root}" --link-controller`);
+    const after1 = fs.readFileSync(controllerPath, 'utf8');
+
+    const { code, stdout } = run(`generate --root "${root}" --link-controller`);
+    expect(code).toBe(0);
+    expect(stdout).toContain('[already linked]');
+
+    const after2 = fs.readFileSync(controllerPath, 'utf8');
+    expect(after2).toBe(after1);
+  });
+
+  it('--dry-run leaves the controller file untouched', () => {
+    const { root, controllerPath } = freshUsersController();
+    const before = fs.readFileSync(controllerPath, 'utf8');
+    const { code, stdout } = run(`generate --root "${root}" --link-controller --dry-run`);
+    expect(code).toBe(0);
+    expect(stdout).toContain('would be added');
+    expect(fs.readFileSync(controllerPath, 'utf8')).toBe(before);
+  });
+
+  it('without --link-controller, the controller is never touched', () => {
+    const { root, controllerPath } = freshUsersController();
+    const before = fs.readFileSync(controllerPath, 'utf8');
+    run(`generate --root "${root}"`);
+    expect(fs.readFileSync(controllerPath, 'utf8')).toBe(before);
+  });
+});
+
+// ---------------------------------------------------------------------------
 // check --json / coverage --json
 // A dedicated, single-controller fixture (not `scan`, which deliberately
 // has a two-controllers-sharing-one-docs-file edge case that makes

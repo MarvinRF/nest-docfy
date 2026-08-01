@@ -166,6 +166,12 @@ export class UsersController {
 }
 ```
 
+Or let `generate --link-controller` add the import and `@WithDocs()` for you (opt-in, mutates the controller file — see [CLI: generate](#cli-generate)):
+
+```bash
+npx nestjs-docfy generate --link-controller
+```
+
 ### 3. Generate companion docs files
 
 Run the CLI to scan your project and generate a pre-filled `*.controller.docs.ts` for every controller:
@@ -226,19 +232,20 @@ npx nestjs-docfy generate [options]
 
 ### Options
 
-| Option              | Default                   | Description                                                                                                         |
-| ------------------- | ------------------------- | ------------------------------------------------------------------------------------------------------------------- |
-| `--root <path>`     | `.`                       | Project root directory                                                                                              |
-| `--tsconfig <path>` | auto-detected             | Path to `tsconfig.json`                                                                                             |
-| `--pattern <glob>`  | `**/*.controller.ts`      | Glob pattern to find controllers                                                                                    |
-| `--out <path>`      | alongside each controller | Output directory for generated files                                                                                |
-| `--force`           | `false`                   | Merge new methods into existing docs files (preserves user edits)                                                   |
-| `--overwrite`       | `false`                   | Discard existing docs file content and regenerate it from scratch (takes precedence over `--force`)                 |
-| `--dry-run`         | `false`                   | Print what would be generated without writing files                                                                 |
-| `--quiet`           | `false`                   | Suppress all output except errors (CI-friendly)                                                                     |
-| `--format`          | `ts`                      | Output format: `ts` or `js`                                                                                         |
-| `--watch`           | `false`                   | Re-generate on controller file changes                                                                              |
-| `--register-plugin` | `false`                   | If `webpack: true` is set without the CLI plugin, add `nestjs-docfy` to `nest-cli.json`'s `compilerOptions.plugins` |
+| Option              | Default                   | Description                                                                                                                                     |
+| ------------------- | ------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `--root <path>`     | `.`                       | Project root directory                                                                                                                          |
+| `--tsconfig <path>` | auto-detected             | Path to `tsconfig.json`                                                                                                                         |
+| `--pattern <glob>`  | `**/*.controller.ts`      | Glob pattern to find controllers                                                                                                                |
+| `--out <path>`      | alongside each controller | Output directory for generated files                                                                                                            |
+| `--force`           | `false`                   | Merge new methods into existing docs files (preserves user edits)                                                                               |
+| `--overwrite`       | `false`                   | Discard existing docs file content and regenerate it from scratch (takes precedence over `--force`)                                             |
+| `--dry-run`         | `false`                   | Print what would be generated without writing files                                                                                             |
+| `--quiet`           | `false`                   | Suppress all output except errors (CI-friendly)                                                                                                 |
+| `--format`          | `ts`                      | Output format: `ts` or `js`                                                                                                                     |
+| `--watch`           | `false`                   | Re-generate on controller file changes                                                                                                          |
+| `--register-plugin` | `false`                   | If `webpack: true` is set without the CLI plugin, add `nestjs-docfy` to `nest-cli.json`'s `compilerOptions.plugins`                             |
+| `--link-controller` | `false`                   | Insert `@WithDocs()` and its import into each controller automatically (opt-in, mutates controller source; idempotent — safe to run repeatedly) |
 
 ### Project types
 

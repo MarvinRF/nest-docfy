@@ -8,6 +8,7 @@ import { setQuiet, log, header, summary } from './logger';
 import { CliError, CliExitCode } from './errors';
 import { detectProject, hasWebpackWithoutPlugin } from './detect-project';
 import { registerWebpackPlugin } from './register-webpack-plugin';
+import { linkController } from './link-controller';
 import { scanAllApps } from './scan-controllers';
 import { writeAllDocs } from './writer';
 import { watchProject } from './watch';
@@ -66,7 +67,10 @@ function runPipeline(options: CliOptions, silent = false): number {
       } else {
         log(
           'warn',
-          `This project builds with "webpack": true, so @WithDocs()/DocfyModule runtime discovery does not work in that mode. Register ${pc.cyan('nestjs-docfy')} under compilerOptions.plugins in nest-cli.json (see the "webpack-cli-plugin" guide), run ${pc.cyan('generate --register-plugin')} to do it automatically, or use ${pc.cyan('patch-spec')} instead.`,
+          `This project builds with "webpack": true, so @WithDocs()/DocfyModule runtime discovery does not work in that mode. Register ${pc.cyan('nestjs-docfy')} under compilerOptions.plugins in nest-cli.json (see the "webpack-cli-plugin" guide), run ${pc.cyan('generate --register-plugin')} to do it automatically, or use ${pc.cyan('patch-spec')} instead.` +
+            (options.linkController
+              ? ` Note: ${pc.cyan('--link-controller')} will still add @WithDocs() to your controllers, but it will be inert at runtime until the plugin is registered.`
+              : ''),
         );
       }
     }
@@ -131,6 +135,29 @@ function runPipeline(options: CliOptions, silent = false): number {
     }
   }
 
+  if (options.linkController) {
+    for (const ctrl of scanResult.controllers) {
+      const project = scanResult.projectsByControllerPath.get(ctrl.filePath);
+      if (!project) continue;
+
+      const result = linkController(ctrl, project, options.dryRun);
+      if (!result) {
+        log('error', `${ctrl.className}: could not locate class in AST to link`);
+        errors++;
+        continue;
+      }
+
+      if (result.changed) {
+        log(
+          options.dryRun ? 'dry' : 'success',
+          `${ctrl.className} → ${pc.cyan('@WithDocs()')} ${options.dryRun ? 'would be added' : 'added'} to ${result.path}`,
+        );
+      } else {
+        log('skip', `${ctrl.className} → ${pc.gray('[already linked]')}`);
+      }
+    }
+  }
+
   if (!options.dryRun && !silent) {
     summary(created, skipped, errors);
   }
@@ -162,6 +189,11 @@ program
   .option(
     '--register-plugin',
     'If webpack:true is set without the CLI plugin, add nestjs-docfy to nest-cli.json compilerOptions.plugins',
+    false,
+  )
+  .option(
+    '--link-controller',
+    'Insert @WithDocs() into each controller automatically (opt-in, mutates controller source)',
     false,
   )
   .action(async (rawOpts: Record<string, unknown>) => {
