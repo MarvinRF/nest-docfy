@@ -21,6 +21,19 @@ jobs:
 
       - run: npm ci
 
+      # Non-blocking: docfy-ui (a production dependency) pulls in
+      # react-router-dom, which has an open high-severity advisory
+      # (GHSA-qwww-vcr4-c8h2, RSC-mode CSRF) with no fix released yet in the
+      # 7.x line — the only "fix" npm offers is a 7-minor downgrade, judged
+      # riskier than the (low, since this app doesn't use RSC mode) exposure.
+      # Accepted and tracked; flip this back to blocking once upstream ships
+      # a real patch. --omit=dev also excludes the unrelated
+      # semantic-release/tar/brace-expansion chain, which never ships in the
+      # published package.
+      - name: npm audit (non-blocking — react-router-dom high, no fix available yet)
+        run: npm audit --omit=dev --audit-level=high
+        continue-on-error: true
+
       - name: Lint
         run: npm run lint
 
