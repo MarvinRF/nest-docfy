@@ -1,3 +1,10 @@
+# [0.15.0](https://github.com/MarvinRF/nest-docfy/compare/v0.14.0...v0.15.0) (2026-08-01)
+
+
+### Features
+
+* **cli:** add init for one-shot onboarding ([38e77bb](https://github.com/MarvinRF/nest-docfy/commit/38e77bbb69f28d16d5ab357ea67a03a346e1dc00))
+
 # [0.14.0](https://github.com/MarvinRF/nest-docfy/compare/v0.13.0...v0.14.0) (2026-08-01)
 
 
