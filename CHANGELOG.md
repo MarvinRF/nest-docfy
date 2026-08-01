@@ -1,3 +1,10 @@
+# [0.14.0](https://github.com/MarvinRF/nest-docfy/compare/v0.13.0...v0.14.0) (2026-08-01)
+
+
+### Features
+
+* **cli:** add --link-controller to insert @WithDocs() automatically ([a92cab2](https://github.com/MarvinRF/nest-docfy/commit/a92cab20a9d896115f88b2503d8430a970f09bb6))
+
 # [0.13.0](https://github.com/MarvinRF/nest-docfy/compare/v0.12.0...v0.13.0) (2026-07-31)
 
 
