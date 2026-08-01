@@ -56,15 +56,15 @@ jobs:
   docfy-check:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
       - if: inputs.export-entry != ''
-        uses: actions/checkout@v4
+        uses: actions/checkout@v7
         with:
           ref: ${{ github.event.pull_request.base.sha }}
           path: base-ref
 
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
         with:
           repository: MarvinRF/nest-docfy
           ref: ${{ inputs.docfy-ref }}
