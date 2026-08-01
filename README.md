@@ -836,6 +836,8 @@ DocfyUiModule.setup('/docs', app, {
 
 Rendered via [`react-markdown`](https://github.com/remarkjs/react-markdown) + GFM support in `docfy-ui` — tables, code blocks (via the same `CodeBlock` component the rest of the UI uses), links, everything you'd expect from markdown. Omit `guides` entirely to leave the sidebar unchanged — no new routes, no new UI.
 
+A guide can also embed a live, runnable request via a ` ```docfy-try ` fenced block (single line: `METHOD /path` matching an endpoint in the current spec) — renders the endpoint's real `RequestPanel` (Code/Try it out, real auth) inline in the narrative instead of just linking to its page. See [`docfy-ui`'s README](https://github.com/MarvinRF/docfy-ui#embedded-try-it-out-docfy-try-blocks) for the exact syntax.
+
 ## Interface-typed DTOs
 
 When a response or body type is a TypeScript `interface` (not a class), Swagger cannot use it as a `type:` value because interfaces are erased at runtime. `nestjs-docfy` detects this automatically and generates an inline `schema:` object instead. **No changes to your code required.**
