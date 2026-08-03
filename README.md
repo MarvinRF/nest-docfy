@@ -277,12 +277,16 @@ npx nestjs-docfy generate [options]
 
 The CLI auto-detects your project layout, no configuration needed:
 
-| Layout            | Detected when                                        |
-| ----------------- | ---------------------------------------------------- |
-| Simple project    | `tsconfig.json` at root, no monorepo markers         |
-| Nx monorepo       | `nx.json` present                                    |
-| Nest CLI monorepo | `nest-cli.json` with `"monorepo": true`              |
-| Generic monorepo  | `packages/` or `apps/` with sub-`package.json` files |
+| Layout            | Detected when                                                                                                                                            |
+| ----------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Simple project    | `tsconfig.json` at root, no monorepo markers                                                                                                             |
+| Nx monorepo       | `nx.json` present                                                                                                                                        |
+| Nest CLI monorepo | `nest-cli.json` with `"monorepo": true`                                                                                                                  |
+| Generic monorepo  | `packages/`, `apps/`, `services/`, or any dir implied by root `package.json`'s `workspaces` field (e.g. `"workspaces/*"`), with sub-`package.json` files |
+
+`generate` also checks `nest-cli.json`'s `compilerOptions` and warns automatically when: `webpack: true` is set without the [CLI plugin](#webpack-true-build-mode) registered, or the CLI plugin is registered while building with the [SWC builder](#webpack-true-build-mode) without `"typeCheck": true` (where it's a silent no-op).
+
+**TS project references**: if the resolved `tsconfig.json` is a "solution style" file (only `references`, no `compilerOptions`/`include` of its own) with a single reference, the CLI follows it to the real project automatically. With more than one reference it's ambiguous which one has your controllers, so nothing is guessed — pass `--tsconfig` pointing at the right one explicitly.
 
 ### Idempotency: --force vs --overwrite
 

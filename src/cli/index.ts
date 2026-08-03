@@ -7,7 +7,7 @@ import pc from 'picocolors';
 import { parseAndValidateOptions, resolveAndValidate, type CliOptions } from './parse-args';
 import { setQuiet, log, header, summary } from './logger';
 import { CliError, CliExitCode } from './errors';
-import { detectProject, hasWebpackWithoutPlugin } from './detect-project';
+import { detectProject, hasWebpackWithoutPlugin, hasInertSwcPlugin } from './detect-project';
 import { registerWebpackPlugin } from './register-webpack-plugin';
 import { linkController } from './link-controller';
 import { findRootModule } from './find-root-module';
@@ -77,6 +77,13 @@ function runPipeline(options: CliOptions, silent = false): number {
               : ''),
         );
       }
+    }
+
+    if (hasInertSwcPlugin(context.root)) {
+      log(
+        'warn',
+        `This project registers ${pc.cyan('nestjs-docfy')} under compilerOptions.plugins while building with the SWC builder — @nestjs/cli only runs a plugin's build-time metadata generation under SWC when ${pc.cyan('"typeCheck": true')} is also set in compilerOptions (SWC does no type-checking of its own otherwise, so the plugin never gets invoked: silently, no error, no docfy-metadata.json, applyDocfyMetadata() has nothing to merge). This is unrelated to webpack: true. Set ${pc.cyan('"typeCheck": true')} to make the plugin work under SWC (the same setting @nestjs/swagger's own SWC support already requires), or use @WithDocs()/DocfyModule.forRoot() (the runtime discovery mechanism, which works under SWC regardless) instead.`,
+      );
     }
   }
 

@@ -37,12 +37,62 @@ function exists(filePath: string): boolean {
 
 const TSCONFIG_CANDIDATES = ['tsconfig.build.json', 'tsconfig.app.json', 'tsconfig.json'];
 
+interface TsConfigLike {
+  references?: { path?: string }[];
+  include?: unknown;
+  files?: unknown[];
+}
+
+/**
+ * A TS "solution style" config — orchestrates project references but has no
+ * `compilerOptions`/source list of its own (`"files": []` or no `include`
+ * at all). ts-morph's `Project({ tsConfigFilePath })` loads exactly the
+ * files a tsconfig resolves to, same as `tsc` — pointed at one of these, it
+ * silently resolves zero source files, so every controller underneath
+ * disappears with no error, just an unhelpful "No controllers found".
+ * Confirmed by reproduction (2026-08-03): a root `tsconfig.json` with only
+ * `references` picked over the real leaf config purely because it's named
+ * `tsconfig.json` (the last, most generic candidate above).
+ */
+function readSolutionTsConfig(tsconfigPath: string): TsConfigLike | undefined {
+  let json: TsConfigLike;
+  try {
+    json = JSON.parse(fs.readFileSync(tsconfigPath, 'utf8')) as TsConfigLike;
+  } catch {
+    return undefined;
+  }
+  const hasReferences = Array.isArray(json.references) && json.references.length > 0;
+  const hasOwnSourceList = 'include' in json || (Array.isArray(json.files) && json.files.length > 0);
+  return hasReferences && !hasOwnSourceList ? json : undefined;
+}
+
+function resolveReferencedTsconfig(fromDir: string, referencePath: string): string | undefined {
+  const resolved = path.resolve(fromDir, referencePath);
+  if (resolved.endsWith('.json')) return exists(resolved) ? resolved : undefined;
+  const nested = path.join(resolved, 'tsconfig.json');
+  return exists(nested) ? nested : undefined;
+}
+
 function findTsconfig(appRoot: string, projectRoot: string): string {
   for (const candidate of TSCONFIG_CANDIDATES) {
     const resolved = path.join(appRoot, candidate);
     try {
       assertWithinRoot(resolved, projectRoot);
-      if (exists(resolved)) return resolved;
+      if (!exists(resolved)) continue;
+
+      const solution = readSolutionTsConfig(resolved);
+      // Only auto-resolve the unambiguous case (exactly one reference) — a
+      // solution fanning out into several real projects needs one ProjectApp
+      // per project to scan all of them, a bigger feature than this fixes;
+      // silently guessing which single one has the controllers would trade
+      // one silent gap for another.
+      if (solution?.references?.length === 1) {
+        const refPath = solution.references[0].path;
+        const leaf = refPath ? resolveReferencedTsconfig(path.dirname(resolved), refPath) : undefined;
+        if (leaf) return leaf;
+      }
+
+      return resolved;
     } catch {
       continue;
     }
@@ -228,7 +278,12 @@ interface NestCliJson {
       compilerOptions?: { tsConfigPath?: string };
     }
   >;
-  compilerOptions?: { webpack?: boolean; plugins?: unknown[] };
+  compilerOptions?: {
+    webpack?: boolean;
+    builder?: string | { type?: string };
+    plugins?: unknown[];
+    typeCheck?: boolean;
+  };
 }
 
 function detectNestCliMonorepo(root: string, nestCliJson: NestCliJson, tsconfigOverride?: string): ProjectContext {
@@ -284,9 +339,41 @@ function detectNestCliMonorepo(root: string, nestCliJson: NestCliJson, tsconfigO
 // Strategy: generic monorepo (packages/ with sub-package.json)
 // ---------------------------------------------------------------------------
 
+const GENERIC_MONOREPO_DIR_NAMES = ['packages', 'apps', 'services'];
+
+interface RootPackageJson {
+  workspaces?: string[] | { packages?: string[] };
+}
+
+/**
+ * Directory names implied by npm/yarn `workspaces` glob patterns in the root
+ * package.json (e.g. `"workspaces/*"` → `"workspaces"`) — covers monorepos
+ * that don't use one of the three hardcoded names above (Turborepo, Lerna
+ * with `useWorkspaces: true`, or a plain custom-named workspace layout).
+ * Only the common single-level-wildcard shape is understood, matching how
+ * real-world workspaces fields are written in practice — a pattern like
+ * `"packages/**"` or a scoped sub-glob is silently skipped rather than
+ * guessed at (no full glob engine here; see `docs/compatibility-matrix.md`
+ * for the patterns still not covered).
+ */
+function workspaceScanDirNames(root: string): string[] {
+  const pkg = safeReadJson<RootPackageJson>(path.join(root, 'package.json'), root);
+  const patterns = Array.isArray(pkg?.workspaces) ? pkg.workspaces : (pkg?.workspaces?.packages ?? []);
+  const names = new Set<string>();
+  for (const pattern of patterns) {
+    const match = /^([^*]+)\/\*$/.exec(pattern);
+    if (match) names.add(match[1]);
+  }
+  return [...names];
+}
+
+function monorepoScanDirNames(root: string): string[] {
+  return [...new Set([...GENERIC_MONOREPO_DIR_NAMES, ...workspaceScanDirNames(root)])];
+}
+
 function detectGenericMonorepo(root: string, tsconfigOverride?: string): ProjectContext {
   const apps: ProjectApp[] = [];
-  const scanDirs = ['packages', 'apps', 'services'].map((d) => path.join(root, d));
+  const scanDirs = monorepoScanDirNames(root).map((d) => path.join(root, d));
 
   for (const scanDir of scanDirs) {
     if (!exists(scanDir)) continue;
@@ -365,6 +452,37 @@ export function hasWebpackWithoutPlugin(root: string): boolean {
   return !pluginListHasDocfy(compilerOptions.plugins ?? []);
 }
 
+function builderType(builder: string | { type?: string } | undefined): string | undefined {
+  if (typeof builder === 'string') return builder;
+  return builder?.type;
+}
+
+/**
+ * True when the target project's nest-cli.json registers `nestjs-docfy`
+ * under `compilerOptions.plugins`, builds with the SWC builder
+ * (`"builder": "swc"` or `{ "type": "swc" }`), and does NOT have
+ * `"typeCheck": true` set — the one remaining condition where this plugin
+ * is a no-op under SWC. Confirmed against `@nestjs/cli`'s own compiler
+ * sources (`SwcCompiler`/`forked-type-checker`): under this builder the CLI
+ * only invokes plugins via `ReadonlyVisitor` (which the plugin now exports,
+ * see `src/plugin/index.ts`), and only when `runTypeChecker` actually runs —
+ * gated on `compilerOptions.typeCheck` (read via the exact same
+ * `getValueOrDefault(configuration, 'compilerOptions.typeCheck', ...)` call
+ * `@nestjs/cli`'s own `build.action.js` uses). Without `typeCheck: true`,
+ * SWC does no type-checking of its own and neither this plugin's
+ * `ReadonlyVisitor` nor `@nestjs/swagger`'s equivalent ever gets invoked —
+ * not a new burden this adds, the same condition `@nestjs/swagger`'s own
+ * SWC support already requires. The build succeeds silently either way,
+ * with zero `docfy-metadata.json` produced and no warning of its own.
+ */
+export function hasInertSwcPlugin(root: string): boolean {
+  const nestCli = safeReadJson<NestCliJson>(path.join(root, 'nest-cli.json'), root);
+  const compilerOptions = nestCli?.compilerOptions;
+  if (builderType(compilerOptions?.builder) !== 'swc') return false;
+  if (compilerOptions?.typeCheck === true) return false;
+  return pluginListHasDocfy(compilerOptions?.plugins ?? []);
+}
+
 // ---------------------------------------------------------------------------
 // Public entry point
 // ---------------------------------------------------------------------------
@@ -377,7 +495,8 @@ export function hasWebpackWithoutPlugin(root: string): boolean {
  * Detection order (first match wins):
  *   1. nx.json present → NX monorepo
  *   2. nest-cli.json with monorepo:true → Nest CLI monorepo
- *   3. packages/ or apps/ with sub-package.json → generic monorepo
+ *   3. packages/, apps/, services/, or a dir implied by package.json's
+ *      "workspaces" field, with sub-package.json → generic monorepo
  *   4. fallback → simple project
  */
 export function detectProject(root: string, tsconfigOverride?: string): ProjectContext {
@@ -395,7 +514,7 @@ export function detectProject(root: string, tsconfigOverride?: string): ProjectC
   }
 
   // 3. Generic monorepo
-  const hasSubPackages = ['packages', 'apps', 'services'].some((dir) => {
+  const hasSubPackages = monorepoScanDirNames(absRoot).some((dir) => {
     const d = path.join(absRoot, dir);
     if (!exists(d)) return false;
     try {

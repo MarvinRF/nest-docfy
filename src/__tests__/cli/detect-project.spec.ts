@@ -1,5 +1,5 @@
 import path from 'path';
-import { detectProject, hasWebpackWithoutPlugin } from '../../cli/detect-project';
+import { detectProject, hasWebpackWithoutPlugin, hasInertSwcPlugin } from '../../cli/detect-project';
 import { PathTraversalError } from '../../cli/errors';
 
 const FIXTURES = path.join(__dirname, 'fixtures');
@@ -143,6 +143,49 @@ describe('detectProject() — generic monorepo', () => {
   });
 });
 
+describe('detectProject() — generic monorepo via package.json "workspaces"', () => {
+  it('discovers apps under a custom-named dir declared as "<dir>/*" (array form)', () => {
+    const ctx = detectProject(fix('workspaces-custom-name'));
+    expect(ctx.kind).toBe('generic-monorepo');
+    const names = ctx.apps.map((a) => a.name).sort();
+    expect(names).toEqual(['api-svc', 'worker-svc']);
+  });
+
+  it('discovers apps under a custom-named dir declared via { packages: [...] } (object form)', () => {
+    const ctx = detectProject(fix('workspaces-object-form'));
+    expect(ctx.kind).toBe('generic-monorepo');
+    expect(ctx.apps.map((a) => a.name)).toEqual(['thing-a']);
+  });
+
+  it('still detects packages/apps/services even without a matching "workspaces" field', () => {
+    // Regression guard: adding workspaces-derived dir names must not drop
+    // the three hardcoded ones the "generic" fixture above relies on.
+    const ctx = detectProject(fix('generic'));
+    expect(ctx.kind).toBe('generic-monorepo');
+  });
+});
+
+describe('detectProject() — TS "solution style" tsconfig (project references)', () => {
+  it('follows a single reference to the real leaf tsconfig when the root one has no compilerOptions/include of its own', () => {
+    const ctx = detectProject(fix('ts-solution-single-ref'));
+    expect(ctx.apps[0].tsconfig).toBe(path.join(fix('ts-solution-single-ref'), 'src', 'tsconfig.json'));
+  });
+
+  it('follows a reference that points directly at a tsconfig file, not a directory', () => {
+    const ctx = detectProject(fix('ts-solution-direct-file-ref'));
+    expect(ctx.apps[0].tsconfig).toBe(path.join(fix('ts-solution-direct-file-ref'), 'tsconfig.src.json'));
+  });
+
+  it('does not guess when the solution has more than one reference — falls back to the root tsconfig as before', () => {
+    // Ambiguous: could be "src" or "test". Guessing either one risks
+    // silently missing controllers in the other, the same class of bug
+    // this feature fixes for the single-reference case — so it's left
+    // unresolved rather than picking one arbitrarily.
+    const ctx = detectProject(fix('ts-solution-multi-ref'));
+    expect(ctx.apps[0].tsconfig).toBe(path.join(fix('ts-solution-multi-ref'), 'tsconfig.json'));
+  });
+});
+
 describe('detectProject() — tsconfig override', () => {
   it('uses the override tsconfig for simple projects', () => {
     const override = path.join(fix('simple'), 'tsconfig.json');
@@ -177,5 +220,31 @@ describe('hasWebpackWithoutPlugin()', () => {
 
   it('is false when nest-cli.json has no compilerOptions.webpack', () => {
     expect(hasWebpackWithoutPlugin(fix('nest-cli'))).toBe(false);
+  });
+});
+
+describe('hasInertSwcPlugin()', () => {
+  it('is true when builder is "swc" (string form) and the plugin is registered', () => {
+    expect(hasInertSwcPlugin(fix('swc-with-plugin'))).toBe(true);
+  });
+
+  it('is true when builder is { type: "swc" } (object form) and the plugin is registered', () => {
+    expect(hasInertSwcPlugin(fix('swc-with-plugin-object'))).toBe(true);
+  });
+
+  it('is false when builder is "swc" but the plugin is not registered — nothing to warn about', () => {
+    expect(hasInertSwcPlugin(fix('swc-no-plugin'))).toBe(false);
+  });
+
+  it('is false when the plugin is registered but the builder is not swc', () => {
+    expect(hasInertSwcPlugin(fix('webpack-with-plugin'))).toBe(false);
+  });
+
+  it('is false when there is no nest-cli.json at all', () => {
+    expect(hasInertSwcPlugin(fix('simple'))).toBe(false);
+  });
+
+  it('is false when "typeCheck": true is set — the plugin actually works via ReadonlyVisitor then', () => {
+    expect(hasInertSwcPlugin(fix('swc-with-plugin-and-typecheck'))).toBe(false);
   });
 });
