@@ -267,6 +267,14 @@ function detectNx(root: string, tsconfigOverride?: string): ProjectContext {
 // Strategy: Nest CLI monorepo
 // ---------------------------------------------------------------------------
 
+interface CompilerOptions {
+  tsConfigPath?: string;
+  webpack?: boolean;
+  builder?: string | { type?: string };
+  plugins?: unknown[];
+  typeCheck?: boolean;
+}
+
 interface NestCliJson {
   monorepo?: boolean;
   projects?: Record<
@@ -275,15 +283,10 @@ interface NestCliJson {
       type?: string;
       root?: string;
       entryFile?: string;
-      compilerOptions?: { tsConfigPath?: string };
+      compilerOptions?: CompilerOptions;
     }
   >;
-  compilerOptions?: {
-    webpack?: boolean;
-    builder?: string | { type?: string };
-    plugins?: unknown[];
-    typeCheck?: boolean;
-  };
+  compilerOptions?: CompilerOptions;
 }
 
 function detectNestCliMonorepo(root: string, nestCliJson: NestCliJson, tsconfigOverride?: string): ProjectContext {
@@ -439,48 +442,84 @@ export function pluginListHasDocfy(plugins: unknown[]): boolean {
   });
 }
 
-/**
- * True when the target project's nest-cli.json has `webpack: true` but does
- * not register `nestjs-docfy` under `compilerOptions.plugins` — the runtime
- * discovery mechanism (`@WithDocs()` + `DocfyModule`) silently does not work
- * in that build mode, and the CLI plugin is the sanctioned fix.
- */
-export function hasWebpackWithoutPlugin(root: string): boolean {
-  const nestCli = safeReadJson<NestCliJson>(path.join(root, 'nest-cli.json'), root);
-  const compilerOptions = nestCli?.compilerOptions;
-  if (!compilerOptions?.webpack) return false;
-  return !pluginListHasDocfy(compilerOptions.plugins ?? []);
-}
-
 function builderType(builder: string | { type?: string } | undefined): string | undefined {
   if (typeof builder === 'string') return builder;
   return builder?.type;
 }
 
 /**
- * True when the target project's nest-cli.json registers `nestjs-docfy`
- * under `compilerOptions.plugins`, builds with the SWC builder
- * (`"builder": "swc"` or `{ "type": "swc" }`), and does NOT have
- * `"typeCheck": true` set — the one remaining condition where this plugin
- * is a no-op under SWC. Confirmed against `@nestjs/cli`'s own compiler
- * sources (`SwcCompiler`/`forked-type-checker`): under this builder the CLI
- * only invokes plugins via `ReadonlyVisitor` (which the plugin now exports,
- * see `src/plugin/index.ts`), and only when `runTypeChecker` actually runs —
- * gated on `compilerOptions.typeCheck` (read via the exact same
- * `getValueOrDefault(configuration, 'compilerOptions.typeCheck', ...)` call
- * `@nestjs/cli`'s own `build.action.js` uses). Without `typeCheck: true`,
- * SWC does no type-checking of its own and neither this plugin's
- * `ReadonlyVisitor` nor `@nestjs/swagger`'s equivalent ever gets invoked —
- * not a new burden this adds, the same condition `@nestjs/swagger`'s own
- * SWC support already requires. The build succeeds silently either way,
- * with zero `docfy-metadata.json` produced and no warning of its own.
+ * `@nestjs/cli` lets each project in a Nest CLI monorepo override
+ * `compilerOptions` individually (`projects.<name>.compilerOptions`),
+ * falling back to the root `compilerOptions` value when a project doesn't
+ * set its own — confirmed by reading `@nestjs/cli`'s own
+ * `getValueOrDefault()` (`lib/compiler/helpers/get-value-or-default.js`),
+ * which every build-time lookup (`webpack`, `builder`, `plugins`,
+ * `typeCheck`) goes through. Reproduced: a two-project monorepo with no
+ * root `webpack` setting but `projects.worker.compilerOptions.webpack: true`
+ * builds `worker` under webpack for real — while a check that only reads
+ * the root `compilerOptions` (as this file used to) sees nothing wrong and
+ * never warns, even though that project's runtime discovery is broken.
  */
-export function hasInertSwcPlugin(root: string): boolean {
+function effectiveCompilerOptions(nestCli: NestCliJson, projectName: string | undefined): CompilerOptions {
+  const root = nestCli.compilerOptions ?? {};
+  if (!projectName) return root;
+  return { ...root, ...(nestCli.projects?.[projectName]?.compilerOptions ?? {}) };
+}
+
+/** Project names to check — each configured project, or `undefined` (meaning "the root itself") when there's no `projects` map at all. */
+function projectTargets(nestCli: NestCliJson): (string | undefined)[] {
+  const names = Object.keys(nestCli.projects ?? {});
+  return names.length > 0 ? names : [undefined];
+}
+
+/**
+ * Names of every project (or `''` for a non-monorepo root) whose *effective*
+ * `compilerOptions` has `webpack: true` but no `nestjs-docfy` registered
+ * under `plugins` — the runtime discovery mechanism (`@WithDocs()` +
+ * `DocfyModule`) silently does not work in that build mode, and the CLI
+ * plugin is the sanctioned fix. Empty array means nothing is wrong.
+ */
+export function projectsWithWebpackWithoutPlugin(root: string): string[] {
   const nestCli = safeReadJson<NestCliJson>(path.join(root, 'nest-cli.json'), root);
-  const compilerOptions = nestCli?.compilerOptions;
-  if (builderType(compilerOptions?.builder) !== 'swc') return false;
-  if (compilerOptions?.typeCheck === true) return false;
-  return pluginListHasDocfy(compilerOptions?.plugins ?? []);
+  if (!nestCli) return [];
+  const affected: string[] = [];
+  for (const name of projectTargets(nestCli)) {
+    const opts = effectiveCompilerOptions(nestCli, name);
+    if (opts.webpack && !pluginListHasDocfy(opts.plugins ?? [])) affected.push(name ?? '');
+  }
+  return affected;
+}
+
+/**
+ * Names of every project (or `''` for a non-monorepo root) whose *effective*
+ * `compilerOptions` registers `nestjs-docfy` under `plugins`, builds with
+ * the SWC builder (`"builder": "swc"` or `{ "type": "swc" }`), and does NOT
+ * have `"typeCheck": true` set — the one remaining condition where this
+ * plugin is a no-op under SWC. Confirmed against `@nestjs/cli`'s own
+ * compiler sources (`SwcCompiler`/`forked-type-checker`): under this builder
+ * the CLI only invokes plugins via `ReadonlyVisitor` (which the plugin now
+ * exports, see `src/plugin/index.ts`), and only when `runTypeChecker`
+ * actually runs — gated on `compilerOptions.typeCheck` (read via the exact
+ * same `getValueOrDefault(configuration, 'compilerOptions.typeCheck', ...)`
+ * call `@nestjs/cli`'s own `build.action.js` uses, per-project override
+ * included). Without `typeCheck: true`, SWC does no type-checking of its own
+ * and neither this plugin's `ReadonlyVisitor` nor `@nestjs/swagger`'s
+ * equivalent ever gets invoked — not a new burden this adds, the same
+ * condition `@nestjs/swagger`'s own SWC support already requires. The build
+ * succeeds silently either way, with zero `docfy-metadata.json` produced
+ * and no warning of its own. Empty array means nothing is wrong.
+ */
+export function projectsWithInertSwcPlugin(root: string): string[] {
+  const nestCli = safeReadJson<NestCliJson>(path.join(root, 'nest-cli.json'), root);
+  if (!nestCli) return [];
+  const affected: string[] = [];
+  for (const name of projectTargets(nestCli)) {
+    const opts = effectiveCompilerOptions(nestCli, name);
+    if (builderType(opts.builder) === 'swc' && opts.typeCheck !== true && pluginListHasDocfy(opts.plugins ?? [])) {
+      affected.push(name ?? '');
+    }
+  }
+  return affected;
 }
 
 // ---------------------------------------------------------------------------

@@ -1,5 +1,5 @@
 import path from 'path';
-import { detectProject, hasWebpackWithoutPlugin, hasInertSwcPlugin } from '../../cli/detect-project';
+import { detectProject, projectsWithWebpackWithoutPlugin, projectsWithInertSwcPlugin } from '../../cli/detect-project';
 import { PathTraversalError } from '../../cli/errors';
 
 const FIXTURES = path.join(__dirname, 'fixtures');
@@ -201,50 +201,66 @@ describe('detectProject() — security: path traversal in fixture paths', () => 
   });
 });
 
-describe('hasWebpackWithoutPlugin()', () => {
-  it('is true when webpack is true and no plugin is registered', () => {
-    expect(hasWebpackWithoutPlugin(fix('webpack-no-plugin'))).toBe(true);
+describe('projectsWithWebpackWithoutPlugin()', () => {
+  it("returns [''] (root sentinel) when webpack is true and no plugin is registered", () => {
+    expect(projectsWithWebpackWithoutPlugin(fix('webpack-no-plugin'))).toEqual(['']);
   });
 
-  it('is false when the plugin is registered as a string entry', () => {
-    expect(hasWebpackWithoutPlugin(fix('webpack-with-plugin'))).toBe(false);
+  it('is empty when the plugin is registered as a string entry', () => {
+    expect(projectsWithWebpackWithoutPlugin(fix('webpack-with-plugin'))).toEqual([]);
   });
 
-  it('is false when the plugin is registered as an object entry', () => {
-    expect(hasWebpackWithoutPlugin(fix('webpack-with-plugin-object'))).toBe(false);
+  it('is empty when the plugin is registered as an object entry', () => {
+    expect(projectsWithWebpackWithoutPlugin(fix('webpack-with-plugin-object'))).toEqual([]);
   });
 
-  it('is false when there is no nest-cli.json at all', () => {
-    expect(hasWebpackWithoutPlugin(fix('simple'))).toBe(false);
+  it('is empty when there is no nest-cli.json at all', () => {
+    expect(projectsWithWebpackWithoutPlugin(fix('simple'))).toEqual([]);
   });
 
-  it('is false when nest-cli.json has no compilerOptions.webpack', () => {
-    expect(hasWebpackWithoutPlugin(fix('nest-cli'))).toBe(false);
+  it('is empty when nest-cli.json has no compilerOptions.webpack', () => {
+    expect(projectsWithWebpackWithoutPlugin(fix('nest-cli'))).toEqual([]);
+  });
+
+  it('names the specific project when only its per-project compilerOptions override sets webpack: true', () => {
+    // Root has no webpack setting at all — only "worker" overrides it, same
+    // as @nestjs/cli's own getValueOrDefault() precedence (per-project wins,
+    // falls back to root). A root-only check would miss this entirely.
+    expect(projectsWithWebpackWithoutPlugin(fix('nest-cli-monorepo-mixed-webpack'))).toEqual(['worker']);
+  });
+
+  it('does not flag a project whose override registers the plugin, even if a sibling project is broken', () => {
+    const affected = projectsWithWebpackWithoutPlugin(fix('nest-cli-monorepo-mixed-webpack'));
+    expect(affected).not.toContain('api');
   });
 });
 
-describe('hasInertSwcPlugin()', () => {
-  it('is true when builder is "swc" (string form) and the plugin is registered', () => {
-    expect(hasInertSwcPlugin(fix('swc-with-plugin'))).toBe(true);
+describe('projectsWithInertSwcPlugin()', () => {
+  it('names the project when builder is "swc" (string form) and the plugin is registered', () => {
+    expect(projectsWithInertSwcPlugin(fix('swc-with-plugin'))).toEqual(['']);
   });
 
-  it('is true when builder is { type: "swc" } (object form) and the plugin is registered', () => {
-    expect(hasInertSwcPlugin(fix('swc-with-plugin-object'))).toBe(true);
+  it('names the project when builder is { type: "swc" } (object form) and the plugin is registered', () => {
+    expect(projectsWithInertSwcPlugin(fix('swc-with-plugin-object'))).toEqual(['']);
   });
 
-  it('is false when builder is "swc" but the plugin is not registered — nothing to warn about', () => {
-    expect(hasInertSwcPlugin(fix('swc-no-plugin'))).toBe(false);
+  it('is empty when builder is "swc" but the plugin is not registered — nothing to warn about', () => {
+    expect(projectsWithInertSwcPlugin(fix('swc-no-plugin'))).toEqual([]);
   });
 
-  it('is false when the plugin is registered but the builder is not swc', () => {
-    expect(hasInertSwcPlugin(fix('webpack-with-plugin'))).toBe(false);
+  it('is empty when the plugin is registered but the builder is not swc', () => {
+    expect(projectsWithInertSwcPlugin(fix('webpack-with-plugin'))).toEqual([]);
   });
 
-  it('is false when there is no nest-cli.json at all', () => {
-    expect(hasInertSwcPlugin(fix('simple'))).toBe(false);
+  it('is empty when there is no nest-cli.json at all', () => {
+    expect(projectsWithInertSwcPlugin(fix('simple'))).toEqual([]);
   });
 
-  it('is false when "typeCheck": true is set — the plugin actually works via ReadonlyVisitor then', () => {
-    expect(hasInertSwcPlugin(fix('swc-with-plugin-and-typecheck'))).toBe(false);
+  it('is empty when "typeCheck": true is set — the plugin actually works via ReadonlyVisitor then', () => {
+    expect(projectsWithInertSwcPlugin(fix('swc-with-plugin-and-typecheck'))).toEqual([]);
+  });
+
+  it('names the specific project when only its override builds with SWC without typeCheck', () => {
+    expect(projectsWithInertSwcPlugin(fix('nest-cli-monorepo-mixed-swc'))).toEqual(['worker']);
   });
 });

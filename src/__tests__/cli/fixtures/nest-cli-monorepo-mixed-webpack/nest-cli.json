@@ -1,0 +1,12 @@
+{
+  "monorepo": true,
+  "root": "apps/api",
+  "projects": {
+    "api": { "type": "application", "root": "apps/api" },
+    "worker": {
+      "type": "application",
+      "root": "apps/worker",
+      "compilerOptions": { "webpack": true }
+    }
+  }
+}

@@ -7,7 +7,7 @@ import pc from 'picocolors';
 import { parseAndValidateOptions, resolveAndValidate, type CliOptions } from './parse-args';
 import { setQuiet, log, header, summary } from './logger';
 import { CliError, CliExitCode } from './errors';
-import { detectProject, hasWebpackWithoutPlugin, hasInertSwcPlugin } from './detect-project';
+import { detectProject, projectsWithWebpackWithoutPlugin, projectsWithInertSwcPlugin } from './detect-project';
 import { registerWebpackPlugin } from './register-webpack-plugin';
 import { linkController } from './link-controller';
 import { findRootModule } from './find-root-module';
@@ -59,8 +59,14 @@ function runPipeline(options: CliOptions, silent = false): number {
       `Project type: ${kindLabel[context.kind]} (${context.apps.length} app${context.apps.length !== 1 ? 's' : ''})`,
     );
 
-    if (hasWebpackWithoutPlugin(context.root)) {
-      if (options.registerPlugin) {
+    const webpackAffected = projectsWithWebpackWithoutPlugin(context.root);
+    if (webpackAffected.length > 0) {
+      // Per-project compilerOptions overrides (@nestjs/cli monorepos) can't be
+      // safely auto-fixed at the root — registerWebpackPlugin() only ever
+      // writes the root compilerOptions.plugins array, which wouldn't help a
+      // project that overrides "plugins" itself. Only auto-register for the
+      // simple, single-config case (the '' sentinel below).
+      if (options.registerPlugin && webpackAffected.length === 1 && webpackAffected[0] === '') {
         const result = registerWebpackPlugin(context.root, options.dryRun);
         if (result?.changed) {
           log(
@@ -69,9 +75,11 @@ function runPipeline(options: CliOptions, silent = false): number {
           );
         }
       } else {
+        const where =
+          webpackAffected[0] === '' ? '' : ` in project(s) ${webpackAffected.map((n) => pc.cyan(n)).join(', ')}`;
         log(
           'warn',
-          `This project builds with "webpack": true, so @WithDocs()/DocfyModule runtime discovery does not work in that mode. Register ${pc.cyan('nestjs-docfy')} under compilerOptions.plugins in nest-cli.json (see the "webpack-cli-plugin" guide), run ${pc.cyan('generate --register-plugin')} to do it automatically, or use ${pc.cyan('patch-spec')} instead.` +
+          `This project builds with "webpack": true${where}, so @WithDocs()/DocfyModule runtime discovery does not work in that mode. Register ${pc.cyan('nestjs-docfy')} under compilerOptions.plugins in nest-cli.json (see the "webpack-cli-plugin" guide)${webpackAffected[0] === '' ? `, run ${pc.cyan('generate --register-plugin')} to do it automatically,` : ''} or use ${pc.cyan('patch-spec')} instead.` +
             (options.linkController
               ? ` Note: ${pc.cyan('--link-controller')} will still add @WithDocs() to your controllers, but it will be inert at runtime until the plugin is registered.`
               : ''),
@@ -79,10 +87,12 @@ function runPipeline(options: CliOptions, silent = false): number {
       }
     }
 
-    if (hasInertSwcPlugin(context.root)) {
+    const swcAffected = projectsWithInertSwcPlugin(context.root);
+    if (swcAffected.length > 0) {
+      const where = swcAffected[0] === '' ? '' : ` in project(s) ${swcAffected.map((n) => pc.cyan(n)).join(', ')}`;
       log(
         'warn',
-        `This project registers ${pc.cyan('nestjs-docfy')} under compilerOptions.plugins while building with the SWC builder — @nestjs/cli only runs a plugin's build-time metadata generation under SWC when ${pc.cyan('"typeCheck": true')} is also set in compilerOptions (SWC does no type-checking of its own otherwise, so the plugin never gets invoked: silently, no error, no docfy-metadata.json, applyDocfyMetadata() has nothing to merge). This is unrelated to webpack: true. Set ${pc.cyan('"typeCheck": true')} to make the plugin work under SWC (the same setting @nestjs/swagger's own SWC support already requires), or use @WithDocs()/DocfyModule.forRoot() (the runtime discovery mechanism, which works under SWC regardless) instead.`,
+        `This project registers ${pc.cyan('nestjs-docfy')} under compilerOptions.plugins while building with the SWC builder${where} — @nestjs/cli only runs a plugin's build-time metadata generation under SWC when ${pc.cyan('"typeCheck": true')} is also set in compilerOptions (SWC does no type-checking of its own otherwise, so the plugin never gets invoked: silently, no error, no docfy-metadata.json, applyDocfyMetadata() has nothing to merge). This is unrelated to webpack: true. Set ${pc.cyan('"typeCheck": true')} to make the plugin work under SWC (the same setting @nestjs/swagger's own SWC support already requires), or use @WithDocs()/DocfyModule.forRoot() (the runtime discovery mechanism, which works under SWC regardless) instead.`,
       );
     }
   }
