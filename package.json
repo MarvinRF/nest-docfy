@@ -1,6 +1,6 @@
 {
   "name": "nestjs-docfy",
-  "version": "0.16.0",
+  "version": "0.16.1",
   "description": "Keep your NestJS controllers clean — Swagger docs live in a separate companion file by naming convention",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",

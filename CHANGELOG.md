@@ -1,3 +1,10 @@
+## [0.16.1](https://github.com/MarvinRF/nest-docfy/compare/v0.16.0...v0.16.1) (2026-08-03)
+
+
+### Bug Fixes
+
+* **cli:** honor per-project compilerOptions overrides in a Nest CLI monorepo ([965074f](https://github.com/MarvinRF/nest-docfy/commit/965074fdb29cc2c96e91b38cca0362986ac25098))
+
 # [0.16.0](https://github.com/MarvinRF/nest-docfy/compare/v0.15.0...v0.16.0) (2026-08-03)
 
 
