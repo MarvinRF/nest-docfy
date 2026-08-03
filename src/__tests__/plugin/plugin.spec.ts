@@ -5,7 +5,7 @@ jest.mock('../../plugin/generate-metadata', () => ({
   generateDocfyMetadata: jest.fn(),
 }));
 
-import { before } from '../../plugin';
+import { before, ReadonlyVisitor } from '../../plugin';
 import { generateDocfyMetadata } from '../../plugin/generate-metadata';
 
 const mockedGenerate = generateDocfyMetadata as jest.Mock;
@@ -79,6 +79,71 @@ describe('before() — nestjs-docfy CLI plugin entry', () => {
     const program = fakeProgram({ configFilePath: '/project/tsconfig.json', outDir: '/project/dist' });
 
     expect(() => before({}, program)).not.toThrow();
+    expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('scan blew up'));
+    warnSpy.mockRestore();
+  });
+});
+
+describe('ReadonlyVisitor — nestjs-docfy CLI plugin entry for the SWC builder', () => {
+  beforeEach(() => {
+    mockedGenerate.mockReset();
+    mockedGenerate.mockReturnValue({
+      outFile: '/x/docfy-metadata.json',
+      patchedOperationCount: 0,
+      controllersWithoutDocs: [],
+      unparseableDocsFiles: [],
+      scanErrors: [],
+    });
+  });
+
+  it('does not call generateDocfyMetadata until collect() runs, even after visit()', () => {
+    const visitor = new ReadonlyVisitor();
+    const program = fakeProgram({ configFilePath: '/project/tsconfig.json', outDir: '/project/dist' });
+    visitor.visit(program);
+    expect(mockedGenerate).not.toHaveBeenCalled();
+  });
+
+  it('runs the analysis exactly once, from the first visited program, when collect() is called', () => {
+    const visitor = new ReadonlyVisitor();
+    const first = fakeProgram({ configFilePath: '/project/tsconfig.json', outDir: '/project/dist' });
+    const second = fakeProgram({ configFilePath: '/other/tsconfig.json', outDir: '/other/dist' });
+    visitor.visit(first);
+    visitor.visit(second); // a real build visits once per source file — must not re-trigger
+
+    expect(visitor.collect()).toEqual([]);
+    expect(mockedGenerate).toHaveBeenCalledTimes(1);
+    expect(mockedGenerate).toHaveBeenCalledWith(
+      expect.objectContaining({ tsConfigFilePath: '/project/tsconfig.json' }),
+    );
+  });
+
+  it('collect() is a no-op when visit() was never called', () => {
+    const visitor = new ReadonlyVisitor();
+    expect(visitor.collect()).toEqual([]);
+    expect(mockedGenerate).not.toHaveBeenCalled();
+  });
+
+  it('respects an explicit projectRoot/controllerGlob override, same as before()', () => {
+    const visitor = new ReadonlyVisitor({ projectRoot: '/custom/root', controllerGlob: '**/*.ctrl.ts' });
+    const program = fakeProgram({ configFilePath: '/project/tsconfig.json', outDir: '/project/dist' });
+    visitor.visit(program);
+    visitor.collect();
+
+    expect(mockedGenerate).toHaveBeenCalledWith(
+      expect.objectContaining({ projectRoot: '/custom/root', controllerGlob: '**/*.ctrl.ts' }),
+    );
+  });
+
+  it('warns instead of throwing when generateDocfyMetadata itself fails', () => {
+    mockedGenerate.mockImplementation(() => {
+      throw new Error('scan blew up');
+    });
+    const warnSpy = jest.spyOn(console, 'warn').mockImplementation(() => {});
+    const visitor = new ReadonlyVisitor();
+    const program = fakeProgram({ configFilePath: '/project/tsconfig.json', outDir: '/project/dist' });
+    visitor.visit(program);
+
+    expect(() => visitor.collect()).not.toThrow();
     expect(warnSpy).toHaveBeenCalledWith(expect.stringContaining('scan blew up'));
     warnSpy.mockRestore();
   });

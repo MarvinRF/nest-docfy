@@ -1060,6 +1060,22 @@ SwaggerModule.setup('api', app, applyDocfyMetadata(document));
 
 `applyDocfyMetadata()` reads `docfy-metadata.json` from next to your compiled entry file by default. Pass `{ metadataPath }` to point somewhere else. If the file is missing (e.g. the plugin isn't registered), it warns and returns the document unchanged; pass `{ strict: true }` to throw instead, the same `strict` convention `DocfyModule.forRoot()` already uses.
 
+**The SWC builder (`"builder": "swc"`) needs `"typeCheck": true`.** This is unrelated to `webpack: true` — it's a separate quirk of how `@nestjs/cli` invokes compiler plugins. Under the default `tsc` builder and under `webpack`, it calls a plugin's `before()` transformer hook directly; under `"builder": "swc"` it instead only invokes a plugin's `ReadonlyVisitor` (the same mechanism `@nestjs/swagger`'s own SWC support relies on), and only when `runTypeChecker` actually runs — which itself is gated on `"typeCheck": true` in `compilerOptions` (SWC does no type-checking of its own otherwise). `nestjs-docfy`'s plugin exports both:
+
+```json
+{
+  "compilerOptions": {
+    "builder": "swc",
+    "typeCheck": true,
+    "plugins": ["nestjs-docfy"]
+  }
+}
+```
+
+With `typeCheck: true`, `docfy-metadata.json` is generated exactly as under `tsc`/`webpack`. Without it, the plugin is a **silent no-op** — the build succeeds, no `docfy-metadata.json` is written, `applyDocfyMetadata()` finds nothing to merge. `generate` detects this exact combination (plugin registered, `"builder": "swc"`, no `typeCheck: true`) and warns. Side effect worth knowing: under SWC, registering this plugin causes a `metadata.ts` file to be (re)written next to your source root on every build — the same shared artifact `@nestjs/swagger`'s own SWC plugin writes (harmless and empty if that plugin isn't also registered).
+
+The good news either way: `DocfyModule`'s runtime discovery (the whole rest of this README) works normally under SWC regardless of `typeCheck` — SWC compiles one file per module just like `tsc`, so `require.cache` is populated the same way. If you'd rather not set `typeCheck: true`, use `@WithDocs()`/`DocfyModule.forRoot()` instead of the plugin.
+
 #### 2. `patch-spec` (manual, CI-driven): the same analysis, run as a separate step
 
 If you'd rather not add a compiler plugin (e.g. a build pipeline that isn't the Nest CLI, or a stricter policy about what runs during compilation), [`patch-spec`](#cli-patch-spec) computes the identical patch by hand against an already-built document. See that section for usage. This was the only option before the CLI plugin existed, and remains useful for one-off patching (e.g. patching a document fetched from a _different_ running instance than the one being built).
