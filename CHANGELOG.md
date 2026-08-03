@@ -1,3 +1,15 @@
+# [0.16.0](https://github.com/MarvinRF/nest-docfy/compare/v0.15.0...v0.16.0) (2026-08-03)
+
+
+### Bug Fixes
+
+* **cli:** stop silently misdetecting monorepo layout and tsconfig ([5d61e13](https://github.com/MarvinRF/nest-docfy/commit/5d61e13ee3338fc2ee7537aa3cde6981e3c3387b))
+
+
+### Features
+
+* **plugin:** support the SWC builder via ReadonlyVisitor ([77ee4a7](https://github.com/MarvinRF/nest-docfy/commit/77ee4a758e41790989b170cb0c8f73f1d25a4201))
+
 # [0.15.0](https://github.com/MarvinRF/nest-docfy/compare/v0.14.0...v0.15.0) (2026-08-01)
 
 
