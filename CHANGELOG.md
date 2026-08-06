@@ -1,3 +1,11 @@
+# [0.17.0](https://github.com/MarvinRF/nest-docfy/compare/v0.16.1...v0.17.0) (2026-08-06)
+
+
+### Features
+
+* **cli:** add doctor command consolidating all diagnostics ([da2c10c](https://github.com/MarvinRF/nest-docfy/commit/da2c10c76f460338fe95423651495086001ea4a6))
+* **cli:** consolidate contract testing into docfy-core ([a70bf18](https://github.com/MarvinRF/nest-docfy/commit/a70bf18bf78e379a10c1465454f36fae1066fc51))
+
 ## [0.16.1](https://github.com/MarvinRF/nest-docfy/compare/v0.16.0...v0.16.1) (2026-08-03)
 
 
