@@ -389,6 +389,40 @@ describe('E2E — check/coverage --json', () => {
 });
 
 // ---------------------------------------------------------------------------
+// doctor
+// ---------------------------------------------------------------------------
+describe('E2E — doctor', () => {
+  const ROOT = isolatedFixture('json-output');
+
+  afterEach(() => cleanup(ROOT));
+
+  it('doctor --json reports a clean project once docs are generated', () => {
+    run(`generate --root "${ROOT}"`);
+    waitForFile(path.join(ROOT, 'src/items.controller.docs.ts'));
+    const { code, stdout } = run(`doctor --root "${ROOT}" --json`);
+    expect(code).toBe(0);
+    const parsed = JSON.parse(stdout.trim());
+    expect(parsed).toMatchObject({ passed: true, controllersScanned: 1, controllerIssues: [] });
+  });
+
+  it('doctor --json reports controller issues without failing the exit code', () => {
+    const { code, stdout } = run(`doctor --root "${ROOT}" --json`);
+    expect(code).toBe(0); // doctor is a diagnostic tool, not a CI gate — check owns that role
+    const parsed = JSON.parse(stdout.trim());
+    expect(parsed.passed).toBe(false);
+    expect(parsed.controllerIssues).toHaveLength(1);
+    expect(parsed.controllerIssues[0]).toMatchObject({ controllerClass: 'ItemsController', kind: 'missing-file' });
+  });
+
+  it('doctor (text mode) prints a human-readable report and exits 0', () => {
+    const { code, stdout } = run(`doctor --root "${ROOT}"`);
+    expect(code).toBe(0);
+    expect(stdout).toContain('nestjs-docfy doctor');
+    expect(stdout).toContain('Some diagnostics need attention');
+  });
+});
+
+// ---------------------------------------------------------------------------
 // NX monorepo
 // ---------------------------------------------------------------------------
 describe('E2E — NX monorepo', () => {

@@ -28,6 +28,7 @@ import { buildMockApp } from './mock';
 import { runContractTests } from './contract-test';
 import { lintSpec, normalizeDocument } from 'docfy-core';
 import { checkDocsVersionDrift } from './docs-version-check';
+import { runDoctor, isDoctorReportClean } from './doctor';
 
 // eslint-disable-next-line @typescript-eslint/no-require-imports
 const PACKAGE_VERSION = (require('../../package.json') as { version: string }).version;
@@ -523,6 +524,147 @@ program
 
       process.stderr.write(`\n${pc.red(`✖ ${issues.length} controller(s) out of sync.`)}\n\n`);
       process.exit(CliExitCode.PartialError);
+    } catch (err) {
+      if (json && err instanceof CliError) {
+        process.stdout.write(`${JSON.stringify({ error: err.message })}\n`);
+        process.exit(err.exitCode);
+      }
+      if (err instanceof CliError) {
+        process.stderr.write(`\n${pc.red('✖ Error:')} ${err.message}\n\n`);
+        process.exit(err.exitCode);
+      }
+      if (err instanceof Error) {
+        process.stderr.write(`\n${pc.red('✖ Error:')} ${err.message}\n\n`);
+      } else {
+        process.stderr.write(`\n${pc.red('✖ Unknown error')}\n\n`);
+      }
+      process.exit(CliExitCode.Fatal);
+    }
+  });
+
+// ---------------------------------------------------------------------------
+// doctor command
+// ---------------------------------------------------------------------------
+
+const PROJECT_KIND_LABEL: Record<ReturnType<typeof detectProject>['kind'], string> = {
+  simple: 'Simple project',
+  nx: 'NX Monorepo',
+  'nest-cli-monorepo': 'Nest CLI Monorepo',
+  'generic-monorepo': 'Generic Monorepo',
+};
+
+program
+  .command('doctor')
+  .description(
+    'Run every nestjs-docfy diagnostic at once: docs drift, docfy-ui pin, version drift, webpack/SWC plugin setup',
+  )
+  .option('--root <path>', 'Project root directory', '.')
+  .option('--tsconfig <path>', 'Path to tsconfig.json (auto-detected if omitted)')
+  .option('--pattern <glob>', 'Glob pattern to find controllers', '**/*.controller.ts')
+  .option('--format <format>', 'Docs file format to look for: ts or js', 'ts')
+  .option('--json', 'Output a single machine-readable JSON object instead of formatted text', false)
+  .option('--quiet', 'Suppress all output except errors', false)
+  .action(async (rawOpts: Record<string, unknown>) => {
+    const json = Boolean(rawOpts.json);
+    try {
+      const options = parseAndValidateOptions({
+        ...rawOpts,
+        force: false,
+        overwrite: false,
+        dryRun: false,
+        out: undefined,
+        watch: false,
+      } as Parameters<typeof parseAndValidateOptions>[0]);
+      setQuiet(json || options.quiet);
+
+      const report = runDoctor(options.root, {
+        tsconfig: options.tsconfig,
+        pattern: options.pattern,
+        format: options.format,
+        currentVersion: PACKAGE_VERSION,
+      });
+      const clean = isDoctorReportClean(report);
+
+      if (json) {
+        process.stdout.write(`${JSON.stringify({ ...report, passed: clean })}\n`);
+        process.exit(CliExitCode.Ok);
+        return;
+      }
+
+      header('nestjs-docfy doctor');
+      log(
+        'success',
+        `Project type: ${PROJECT_KIND_LABEL[report.project.kind]} (${report.project.apps.length} app${report.project.apps.length !== 1 ? 's' : ''})`,
+      );
+
+      for (const err of report.scanErrors) {
+        log('error', `${err.file}: ${err.message}`);
+      }
+
+      if (report.webpackMissingPlugin.length > 0) {
+        const where =
+          report.webpackMissingPlugin[0] === ''
+            ? ''
+            : ` in project(s) ${report.webpackMissingPlugin.map((n) => pc.cyan(n)).join(', ')}`;
+        log(
+          'warn',
+          `Builds with "webpack": true${where}, so @WithDocs()/DocfyModule runtime discovery does not work in that mode. ` +
+            `Register ${pc.cyan('nestjs-docfy')} under compilerOptions.plugins (run ${pc.cyan('generate --register-plugin')}) or use ${pc.cyan('patch-spec')} instead.`,
+        );
+      }
+
+      if (report.inertSwcPlugin.length > 0) {
+        const where =
+          report.inertSwcPlugin[0] === ''
+            ? ''
+            : ` in project(s) ${report.inertSwcPlugin.map((n) => pc.cyan(n)).join(', ')}`;
+        log(
+          'warn',
+          `The nestjs-docfy compiler plugin is registered${where} but builds with SWC and no "typeCheck": true, ` +
+            `so the plugin never runs. Set ${pc.cyan('"typeCheck": true')} in compilerOptions.`,
+        );
+      }
+
+      if (report.docfyUiPin) {
+        log(
+          'warn',
+          `docfy-ui@${report.docfyUiPin.appDeclaredRange} is declared in your package.json, but it has no effect on ` +
+            `the UI served — nestjs-docfy vendors its own pinned copy (currently docfy-ui@${report.docfyUiPin.servedVersion}). ` +
+            `To get a newer UI, update nestjs-docfy itself.`,
+        );
+      }
+
+      for (const drift of report.versionDrift) {
+        const generatedBy = drift.stampedVersion ? `nestjs-docfy@${drift.stampedVersion}` : 'an older nestjs-docfy';
+        log(
+          'warn',
+          `${drift.controllerClass}: ${drift.docsFile} was generated by ${generatedBy}, older than the installed ` +
+            `nestjs-docfy@${PACKAGE_VERSION} — run ${pc.cyan('generate --overwrite')} to refresh it.`,
+        );
+      }
+
+      if (report.controllersScanned === 0) {
+        log('warn', 'No controllers found matching the pattern.');
+      } else if (report.controllerIssues.length === 0) {
+        log('success', `All ${report.controllersScanned} controller(s) are fully documented.`);
+      } else {
+        for (const issue of report.controllerIssues) {
+          if (issue.kind === 'missing-file') {
+            log('error', `${issue.controllerClass}: no companion docs file found at ${issue.docsFile}`);
+          } else {
+            log('error', `${issue.controllerClass}: undocumented methods: ${issue.methods!.join(', ')}`);
+            log('info', `  → run ${pc.cyan('nestjs-docfy generate --force')} to merge new methods`);
+          }
+        }
+      }
+
+      if (clean) {
+        process.stdout.write(`\n${pc.green('✔ Everything looks good.')}\n\n`);
+      } else {
+        process.stdout.write(`\n${pc.yellow('⚠ Some diagnostics need attention — see above.')}\n\n`);
+      }
+      // Diagnostic tool, not a CI gate — `check`/`coverage` own exit-code enforcement.
+      process.exit(CliExitCode.Ok);
     } catch (err) {
       if (json && err instanceof CliError) {
         process.stdout.write(`${JSON.stringify({ error: err.message })}\n`);

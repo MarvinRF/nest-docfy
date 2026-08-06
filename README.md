@@ -28,6 +28,7 @@ Keep your NestJS controllers clean. Swagger documentation lives in a dedicated c
   - [Project types](#project-types)
   - [Idempotency: --force vs --overwrite](#idempotency---force-vs---overwrite)
 - [CLI: check](#cli-check)
+- [CLI: doctor](#cli-doctor)
 - [CLI: coverage](#cli-coverage)
 - [CLI: lint](#cli-lint)
 - [CLI: patch-spec](#cli-patch-spec)
@@ -357,6 +358,42 @@ Or as an npm script:
     "docs:check": "nestjs-docfy check"
   }
 }
+```
+
+## CLI: doctor
+
+Run every nestjs-docfy diagnostic at once — everything `check` reports plus the webpack/SWC compiler-plugin misconfigurations that otherwise only surface incidentally while running `generate`/`init`. A pure diagnostic tool: unlike `check`, it always exits `0` (nothing to wire into a CI gate — use `check` for that).
+
+```bash
+npx nestjs-docfy doctor [options]
+```
+
+| Option              | Default              | Description                                                              |
+| ------------------- | -------------------- | ------------------------------------------------------------------------ |
+| `--root <path>`     | `.`                  | Project root directory                                                   |
+| `--tsconfig <path>` | auto-detected        | Path to `tsconfig.json`                                                  |
+| `--pattern <glob>`  | `**/*.controller.ts` | Glob pattern to find controllers                                         |
+| `--format <format>` | `ts`                 | Docs file format to look for: `ts` or `js`                               |
+| `--json`            | `false`              | Output a single machine-readable JSON object with every diagnostic field |
+| `--quiet`           | `false`              | Suppress all output except errors                                        |
+
+**What it checks (all in one run):**
+
+- `webpack: true` without the `nestjs-docfy` compiler plugin registered
+- The compiler plugin registered but inert under SWC (`typeCheck` not set)
+- Controllers with no companion docs file, or with undocumented methods (same as `check`)
+- `docfy-ui` declared directly in your own `package.json` (has no effect — see [File naming convention](#file-naming-convention))
+- Docs files stamped by an older `nestjs-docfy` version than the one installed
+
+**Example output:**
+
+```text
+nestjs-docfy doctor
+  ✔ Project type: Simple project (1 app)
+  ⚠ Builds with "webpack": true, so @WithDocs()/DocfyModule runtime discovery does not work in that mode. Register nestjs-docfy under compilerOptions.plugins (run generate --register-plugin) or use patch-spec instead.
+  ✖ UsersController: no companion docs file found at src/users.controller.docs.ts
+
+⚠ Some diagnostics need attention — see above.
 ```
 
 ## CLI: coverage
