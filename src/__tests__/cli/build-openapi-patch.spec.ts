@@ -383,7 +383,7 @@ describe('buildOpenApiPatch()', () => {
     expect(patch['/users'].get.security).toEqual([{ bearer: [] }]);
   });
 
-  it('collects ApiParam/ApiQuery into the parameters array with the right "in"', () => {
+  it('collects ApiParam/ApiQuery/ApiHeader into the parameters array with the right "in"', () => {
     const ctrl = makeCtrl({ methods: [makeMethod({ httpPath: ':id' })] });
     const config: ExtractedDocsConfig = {
       classDecorators: [],
@@ -391,6 +391,7 @@ describe('buildOpenApiPatch()', () => {
         findAll: [
           { name: 'ApiParam', args: [{ name: 'id', required: true }] },
           { name: 'ApiQuery', args: [{ name: 'search' }] },
+          { name: 'ApiHeader', args: [{ name: 'x-request-id', required: true }] },
         ],
       },
     };
@@ -398,6 +399,7 @@ describe('buildOpenApiPatch()', () => {
     expect(patch['/users/{id}'].get.parameters).toEqual([
       { name: 'id', in: 'path', required: true, schema: { type: 'string' } },
       { name: 'search', in: 'query', schema: { type: 'string' } },
+      { name: 'x-request-id', in: 'header', required: true, schema: { type: 'string' } },
     ]);
   });
 

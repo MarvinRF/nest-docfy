@@ -67,6 +67,13 @@ describe('evaluateExpression()', () => {
     expect(evaluateExpression(decl.getInitializerOrThrow())).toEqual([0, 1, 2]);
   });
 
+  it('resolves a const enum identifier to its member values', () => {
+    const project = new Project({ useInMemoryFileSystem: true, skipFileDependencyResolution: true });
+    const sf = project.createSourceFile('x.ts', `const enum Role { Admin = 'admin', User = 'user' } const __x = Role;`);
+    const decl = sf.getVariableDeclarationOrThrow('__x');
+    expect(evaluateExpression(decl.getInitializerOrThrow())).toEqual(['admin', 'user']);
+  });
+
   it('marks an unresolvable property access (not HttpStatus) as Unresolved', () => {
     const result = evaluateExpression(parseExpression('SomeEnum.VALUE'));
     expect(isUnresolved(result)).toBe(true);
