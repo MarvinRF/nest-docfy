@@ -812,6 +812,138 @@ describe('renderDocsFile() — @ApiBody', () => {
   });
 });
 
+describe('renderDocsFile() — file uploads', () => {
+  it('generates ApiConsumes + binary ApiBody for @UploadedFile()', () => {
+    const ctrl = makeCtrl({
+      methods: [
+        {
+          name: 'uploadAvatar',
+          httpDecorator: 'Post',
+          httpPath: ':id/avatar',
+          params: [makeParam({ nestDecorator: '@UploadedFile', type: 'Express.Multer.File' })],
+          returnType: 'void',
+          responseType: null,
+          isAsync: true,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
+    });
+    const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
+    expect(output).toContain("ApiConsumes('multipart/form-data')");
+    expect(output).toContain(
+      "properties: {\n        file: {\n          type: 'string',\n          format: 'binary',\n        },\n      },",
+    );
+  });
+
+  it('generates an array schema for @UploadedFiles()', () => {
+    const ctrl = makeCtrl({
+      methods: [
+        {
+          name: 'uploadPhotos',
+          httpDecorator: 'Post',
+          httpPath: 'photos',
+          params: [makeParam({ nestDecorator: '@UploadedFiles', type: 'Express.Multer.File[]' })],
+          returnType: 'void',
+          responseType: null,
+          isAsync: true,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
+    });
+    const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
+    expect(output).toContain("ApiConsumes('multipart/form-data')");
+    expect(output).toContain('files: {');
+    expect(output).toContain("type: 'array'");
+    expect(output).toContain("format: 'binary'");
+  });
+
+  it('includes ApiConsumes and ApiBody in the swagger import', () => {
+    const ctrl = makeCtrl({
+      methods: [
+        {
+          name: 'uploadAvatar',
+          httpDecorator: 'Post',
+          httpPath: ':id/avatar',
+          params: [makeParam({ nestDecorator: '@UploadedFile', type: 'Express.Multer.File' })],
+          returnType: 'void',
+          responseType: null,
+          isAsync: true,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
+    });
+    const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
+    expect(output).toMatch(/import \{[^}]*ApiConsumes[^}]*\} from '@nestjs\/swagger'/);
+    expect(output).toMatch(/import \{[^}]*ApiBody[^}]*\} from '@nestjs\/swagger'/);
+  });
+
+  it('renders the same content in js format', () => {
+    const ctrl = makeCtrl({
+      methods: [
+        {
+          name: 'uploadAvatar',
+          httpDecorator: 'Post',
+          httpPath: ':id/avatar',
+          params: [makeParam({ nestDecorator: '@UploadedFile', type: 'Express.Multer.File' })],
+          returnType: 'void',
+          responseType: null,
+          isAsync: true,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
+    });
+    const output = renderDocsFile(ctrl, DOCS_PATH.replace('.ts', '.js'), 'js');
+    expect(output).toContain("ApiConsumes('multipart/form-data')");
+    expect(output).toMatch(/const \{[^}]*ApiConsumes[^}]*\} = require\('@nestjs\/swagger'\)/);
+  });
+
+  it('emits only ApiConsumes (no binary ApiBody) when the method also has a @Body() DTO', () => {
+    const ctrl = makeCtrl({
+      methods: [
+        {
+          name: 'create',
+          httpDecorator: 'Post',
+          httpPath: '',
+          params: [
+            makeParam({
+              nestDecorator: '@Body',
+              nestDecoratorArg: null,
+              type: 'CreateItemDto',
+              bodyType: { name: 'CreateItemDto', absolutePath: DTO_PATH, isArray: false, isInterface: false },
+            }),
+            makeParam({ nestDecorator: '@UploadedFile', type: 'Express.Multer.File' }),
+          ],
+          returnType: 'void',
+          responseType: null,
+          isAsync: true,
+          httpStatusCode: null,
+          isInherited: false,
+          inheritedFrom: null,
+          requiresAuth: false,
+        },
+      ],
+    });
+    const output = renderDocsFile(ctrl, DOCS_PATH, 'ts');
+    expect(output).toContain("ApiConsumes('multipart/form-data')");
+    expect(output).toContain('ApiBody({ type: CreateItemDto })');
+    const apiBodyMatches = (output.match(/ApiBody\(/g) ?? []).length;
+    expect(apiBodyMatches).toBe(1);
+    expect(output).not.toContain('binary');
+  });
+});
+
 // ---------------------------------------------------------------------------
 // ApiBearerAuth — auth guard detection
 // ---------------------------------------------------------------------------

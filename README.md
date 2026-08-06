@@ -46,6 +46,7 @@ Keep your NestJS controllers clean. Swagger documentation lives in a dedicated c
   - [DocfyUiModule.setup()](#docfyuimodulesetupmountpath-app-options)
 - [Interface-typed DTOs](#interface-typed-dtos)
 - [class-validator inference](#class-validator-inference)
+- [File uploads](#file-uploads)
 - [@HttpCode() support](#httpcode-support)
 - [Tag groups (x-tagGroups)](#tag-groups-x-taggroups)
 - [File naming convention](#file-naming-convention)
@@ -984,6 +985,35 @@ ApiBody({
 Supported decorators: `@IsString`, `@IsEmail`, `@IsUrl`, `@IsUUID`, `@IsDateString`, `@IsNumber`, `@IsInt`, `@IsBoolean`, `@IsArray`, `@Min`, `@Max`, `@MinLength`, `@MaxLength`, `@IsOptional`.
 
 > If any property in the class already has `@ApiProperty`, inference is skipped and `type: ClassName` is used instead. Your existing Swagger annotations are never overwritten.
+
+## File uploads
+
+A parameter decorated with `@UploadedFile()`/`@UploadedFiles()` automatically gets `@ApiConsumes('multipart/form-data')` plus a binary-format `@ApiBody` schema — the exact pattern `@nestjs/swagger`'s own docs recommend for file uploads. No manual annotation required.
+
+```ts
+// users.controller.ts
+@Post(':id/avatar')
+@UseInterceptors(FileInterceptor('file'))
+uploadAvatar(@Param('id') id: string, @UploadedFile() file: Express.Multer.File) { ... }
+```
+
+Generated output:
+
+```ts
+uploadAvatar: [
+  ApiOperation({ summary: 'Upload avatar' }),
+  ApiParam({ name: 'id', type: String }),
+  ApiConsumes('multipart/form-data'),
+  ApiBody({ schema: { type: 'object', properties: { file: { type: 'string', format: 'binary' } } } }),
+  ApiResponse({ status: 201, description: 'Created' }),
+],
+```
+
+`@UploadedFiles()` generates an array schema instead: `files: { type: 'array', items: { type: 'string', format: 'binary' } } }`.
+
+The schema property is always the generic name `file`/`files` — it isn't inferred from `FileInterceptor('fieldName')`, so rename it by hand in the generated stub if your field is named differently.
+
+> When the method also has a `@Body()` DTO param (form-data with both fields and a file), only `@ApiConsumes` is auto-generated — the DTO's own `@ApiBody({ type: ... })` is left as-is rather than guessing a merged schema. Add the file field to that schema manually.
 
 ## @HttpCode() support
 

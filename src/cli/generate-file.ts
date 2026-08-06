@@ -126,7 +126,7 @@ function collectDtoImports(methods: MethodInfo[], docsFilePath: string): Resolve
 // ---------------------------------------------------------------------------
 
 type SwaggerDecorator =
-  'ApiTags' | 'ApiOperation' | 'ApiResponse' | 'ApiParam' | 'ApiBody' | 'ApiQuery' | 'ApiBearerAuth';
+  'ApiTags' | 'ApiOperation' | 'ApiResponse' | 'ApiParam' | 'ApiBody' | 'ApiQuery' | 'ApiBearerAuth' | 'ApiConsumes';
 
 function collectSwaggerDecorators(ctrl: ControllerInfo): Set<SwaggerDecorator> {
   const used = new Set<SwaggerDecorator>(['ApiTags', 'ApiOperation', 'ApiResponse']);
@@ -136,6 +136,10 @@ function collectSwaggerDecorators(ctrl: ControllerInfo): Set<SwaggerDecorator> {
       if (p.nestDecorator === '@Param' && p.nestDecoratorArg !== null) used.add('ApiParam');
       if (p.nestDecorator === '@Query' && p.nestDecoratorArg !== null) used.add('ApiQuery');
       if (p.nestDecorator === '@Body' && p.nestDecoratorArg === null) used.add('ApiBody');
+      if (p.nestDecorator === '@UploadedFile' || p.nestDecorator === '@UploadedFiles') {
+        used.add('ApiConsumes');
+        used.add('ApiBody');
+      }
     }
   }
   if (ctrl.controllerRequiresAuth) used.add('ApiBearerAuth');
@@ -203,6 +207,37 @@ function renderApiBody(p: ParamInfo, indent: string): string | null {
   }
 
   return null;
+}
+
+/**
+ * Renders `ApiConsumes('multipart/form-data')` + a binary-schema `ApiBody` for a
+ * `@UploadedFile()`/`@UploadedFiles()` parameter — the pattern `@nestjs/swagger`'s own
+ * docs recommend for file uploads. The schema's property is always the generic
+ * `file`/`files` name (not inferred from `FileInterceptor('fieldName')` — that would
+ * require inspecting `@UseInterceptors`, which nothing in this extractor does today,
+ * for a name the user can trivially fix by hand in the generated stub).
+ *
+ * When the method also has a `@Body()` DTO param, only `ApiConsumes` is emitted —
+ * `renderApiBody` already generates that DTO's own `ApiBody`, and two `ApiBody()`
+ * calls on the same method would be invalid. Correct-but-incomplete (content-type
+ * right, file field missing from the schema) beats guessing a merged schema.
+ */
+function renderFileUpload(p: ParamInfo, indent: string, hasBodyParam: boolean): string[] | null {
+  if (p.nestDecorator !== '@UploadedFile' && p.nestDecorator !== '@UploadedFiles') return null;
+
+  const lines = [`${indent}ApiConsumes('multipart/form-data'),`];
+  if (hasBodyParam) return lines;
+
+  const isMultiple = p.nestDecorator === '@UploadedFiles';
+  const fileProperty: SchemaProperty = isMultiple
+    ? { type: 'array', items: { type: 'string', format: 'binary' } }
+    : { type: 'string', format: 'binary' };
+  const schemaStr = renderSchemaProperty(
+    { type: 'object', properties: { [isMultiple ? 'files' : 'file']: fileProperty } },
+    indent,
+  );
+  lines.push(`${indent}ApiBody({ schema: ${schemaStr} }),`);
+  return lines;
 }
 
 // ---------------------------------------------------------------------------
@@ -352,14 +387,20 @@ function renderMethod(m: MethodInfo, indent: string): string {
 
   if (m.requiresAuth) lines.push(`${inner}ApiBearerAuth(),`);
 
+  const hasBodyParam = m.params.some((p) => p.nestDecorator === '@Body' && p.nestDecoratorArg === null);
+
   for (const p of m.params) {
+    const fileLines = renderFileUpload(p, inner, hasBodyParam);
+    if (fileLines) {
+      lines.push(...fileLines);
+      continue;
+    }
     const paramLine = renderApiParam(p, inner) ?? renderApiQuery(p, inner) ?? renderApiBody(p, inner);
     if (paramLine) lines.push(paramLine);
   }
 
   lines.push(`${inner}${renderApiResponse(status, m.responseType, inner)},`);
 
-  const hasBodyParam = m.params.some((p) => p.nestDecorator === '@Body' && p.nestDecoratorArg === null);
   if (hasBodyParam) {
     lines.push(`${inner}ApiResponse({ status: 400, description: '${statusDescription(400)}' }),`);
   }
@@ -400,6 +441,7 @@ export function renderDocsFile(ctrl: ControllerInfo, docsFilePath: string, forma
     ...(swaggerDecorators.has('ApiParam') ? ['ApiParam'] : []),
     ...(swaggerDecorators.has('ApiQuery') ? ['ApiQuery'] : []),
     ...(swaggerDecorators.has('ApiBody') ? ['ApiBody'] : []),
+    ...(swaggerDecorators.has('ApiConsumes') ? ['ApiConsumes'] : []),
   ].join(', ');
 
   const classDecoratorLines = [

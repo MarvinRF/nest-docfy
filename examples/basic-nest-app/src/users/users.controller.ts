@@ -1,4 +1,15 @@
-import { Body, Controller, Get, NotFoundException, Param, Post, Query } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Get,
+  NotFoundException,
+  Param,
+  Post,
+  Query,
+  UploadedFile,
+  UseInterceptors,
+} from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { WithDocs } from 'nestjs-docfy';
 import { CreateUserDto } from './dto/create-user.dto';
 import { AdminUserEntity, UserEntity, UserRole } from './entities/user.entity';
@@ -30,5 +41,13 @@ export class UsersController {
     const user: UserEntity = { id: String(this.users.length + 1), name: dto.name, role: dto.role };
     this.users.push(user);
     return user;
+  }
+
+  @Post(':id/avatar')
+  @UseInterceptors(FileInterceptor('file'))
+  uploadAvatar(@Param('id') id: string, @UploadedFile() file: Express.Multer.File): { received: number } {
+    const user = this.users.find((u) => u.id === id);
+    if (!user) throw new NotFoundException(`User ${id} not found`);
+    return { received: file.size };
   }
 }
