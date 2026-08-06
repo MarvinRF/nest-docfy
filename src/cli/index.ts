@@ -25,8 +25,7 @@ import { exportSpec } from './export-spec';
 import { readSpecSource } from './read-spec-source';
 import type { OpenApiDocument } from './merge-spec-patch';
 import { buildMockApp } from './mock';
-import { runContractTests } from './contract-test';
-import { lintSpec, normalizeDocument } from 'docfy-core';
+import { lintSpec, normalizeDocument, runContractTests } from 'docfy-core';
 import { checkDocsVersionDrift } from './docs-version-check';
 import { runDoctor, isDoctorReportClean } from './doctor';
 
@@ -1187,6 +1186,12 @@ program
     (value: string, previous: string[]) => previous.concat([value]),
     [] as string[],
   )
+  .option('--filter <substring>', 'Case-insensitive substring match against path/tags, to test a subset')
+  .option(
+    '--restrict-to-servers',
+    "Reject the run before firing any request if --base-url doesn't match one of the spec's declared servers",
+    false,
+  )
   .option('--root <path>', 'Project root directory', '.')
   .option('--json', 'Output a single machine-readable JSON object instead of formatted text', false)
   .option('--quiet', 'Suppress all output except errors', false)
@@ -1209,8 +1214,14 @@ program
         headers[raw.slice(0, separatorIndex).trim()] = raw.slice(separatorIndex + 1).trim();
       }
 
-      const document: OpenApiDocument = await readSpecSource(String(rawOpts.spec), root);
-      const results = await runContractTests(document, { baseUrl: String(rawOpts.baseUrl), headers });
+      const rawDocument: OpenApiDocument = await readSpecSource(String(rawOpts.spec), root);
+      const document = await normalizeDocument(rawDocument);
+      const results = await runContractTests(document, {
+        baseUrl: String(rawOpts.baseUrl),
+        headers,
+        filter: rawOpts.filter ? String(rawOpts.filter) : undefined,
+        restrictToServers: Boolean(rawOpts.restrictToServers),
+      });
 
       const mismatched = results.filter((r) => r.outcome.kind === 'matched' && r.outcome.mismatches.length > 0);
       const requestFailed = results.filter((r) => r.outcome.kind === 'request-failed');
