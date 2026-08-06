@@ -944,6 +944,8 @@ ApiResponse({
 
 Supports: primitives, nullable unions (`T | null`), arrays, nested interfaces, and optional properties (excluded from `required`).
 
+**Generic types** (e.g. `Promise<PaginatedResponse<UserDto>>`) resolve the real type argument in place of `T` — a `PaginatedResponse<string>`'s `items: T[]` property correctly becomes `items: { type: 'array', items: { type: 'string' } }`, and likewise when `T` is an `interface` (inlined the same way as above). When `T` is a `class`, the property still falls back to `items: { type: 'array', items: { type: 'object' } }` — classes are never inlined into _nested_ properties (only a method's own top-level return type gets its full class-derived schema), so this is the same pre-existing limitation any nested class reference has, not something specific to generics.
+
 ## class-validator inference
 
 When a DTO class uses `class-validator` decorators and does **not** already have `@ApiProperty` on its properties, `nestjs-docfy` infers a full JSON Schema from the validator decorators. No manual annotation required.

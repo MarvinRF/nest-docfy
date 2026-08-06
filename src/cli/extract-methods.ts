@@ -204,7 +204,7 @@ function getParamDecoratorArg(p: ParameterDeclaration, decoratorName: string): s
 // Inline schema extraction (for interface-typed DTOs)
 // ---------------------------------------------------------------------------
 
-function typeToSchemaProperty(type: Type, depth: number): SchemaProperty {
+function typeToSchemaProperty(type: Type, depth: number, substitution: Map<string, Type> = new Map()): SchemaProperty {
   if (depth > 6) return { type: 'object' };
 
   try {
@@ -243,7 +243,7 @@ function typeToSchemaProperty(type: Type, depth: number): SchemaProperty {
       } else {
         // Heterogeneous union (mixed primitive kinds, or ≥2 object/interface types) —
         // represent as oneOf rather than silently dropping the type info.
-        const oneOf = nonNull.map((t) => typeToSchemaProperty(t, depth + 1));
+        const oneOf = nonNull.map((t) => typeToSchemaProperty(t, depth + 1, substitution));
         return { oneOf, ...(isNullable ? { nullable: true } : {}) };
       }
     }
@@ -267,32 +267,43 @@ function typeToSchemaProperty(type: Type, depth: number): SchemaProperty {
       prop.type = 'array';
       try {
         const elem = core.getArrayElementTypeOrThrow();
-        prop.items = typeToSchemaProperty(elem, depth + 1);
+        prop.items = typeToSchemaProperty(elem, depth + 1, substitution);
       } catch {
         prop.items = {};
       }
     } else {
-      // Attempt to recurse into an interface or class with properties
+      // Attempt to recurse into an interface, a class-side generic type
+      // parameter (substituted with its real instantiated type argument,
+      // see `typeParamSubstitution`), or fall back to a bare object.
       const sym = core.getSymbol();
-      const decls = sym?.getDeclarations();
-      if (decls && decls.length > 0) {
-        const decl = decls[0];
-        const srcPath = decl.getSourceFile().getFilePath();
-        if (
-          decl.getKind() === SyntaxKind.InterfaceDeclaration &&
-          !srcPath.includes('node_modules') &&
-          !srcPath.endsWith('.d.ts')
-        ) {
-          const nested = buildSchemaFromInterface(decl as InterfaceDeclaration, depth + 1);
-          prop.type = 'object';
-          if (Object.keys(nested.properties).length > 0) prop.properties = nested.properties;
-          if (nested.required.length > 0) prop.required = nested.required;
-        } else {
-          prop.type = 'object';
+      let handled = false;
+      if (sym) {
+        const decls = sym.getDeclarations();
+        if (decls.length > 0) {
+          const decl = decls[0];
+          if (decl.getKind() === SyntaxKind.TypeParameter) {
+            const substituted = substitution.get(sym.getName());
+            if (substituted) {
+              Object.assign(prop, typeToSchemaProperty(substituted, depth + 1, substitution));
+              handled = true;
+            }
+          } else {
+            const srcPath = decl.getSourceFile().getFilePath();
+            if (
+              decl.getKind() === SyntaxKind.InterfaceDeclaration &&
+              !srcPath.includes('node_modules') &&
+              !srcPath.endsWith('.d.ts')
+            ) {
+              const nested = buildSchemaFromInterface(decl as InterfaceDeclaration, depth + 1, substitution);
+              prop.type = 'object';
+              if (Object.keys(nested.properties).length > 0) prop.properties = nested.properties;
+              if (nested.required.length > 0) prop.required = nested.required;
+              handled = true;
+            }
+          }
         }
-      } else {
-        prop.type = 'object';
       }
+      if (!handled) prop.type = 'object';
     }
 
     return prop;
@@ -312,7 +323,11 @@ function typeToSchemaProperty(type: Type, depth: number): SchemaProperty {
  * (nothing in this project's pipeline registers them with `@nestjs/swagger`
  * otherwise).
  */
-function buildSchemaFromClassProperties(cls: ClassDeclaration, depth: number): InlineSchema | null {
+function buildSchemaFromClassProperties(
+  cls: ClassDeclaration,
+  depth: number,
+  substitution: Map<string, Type> = new Map(),
+): InlineSchema | null {
   const properties: Record<string, SchemaProperty> = {};
   const required: string[] = [];
   let foundAny = false;
@@ -322,7 +337,7 @@ function buildSchemaFromClassProperties(cls: ClassDeclaration, depth: number): I
       try {
         const name = prop.getName();
         if (!IDENTIFIER_RE.test(name)) continue;
-        properties[name] = typeToSchemaProperty(prop.getType(), depth);
+        properties[name] = typeToSchemaProperty(prop.getType(), depth, substitution);
         foundAny = true;
         if (!prop.hasQuestionToken()) required.push(name);
       } catch {
@@ -336,7 +351,11 @@ function buildSchemaFromClassProperties(cls: ClassDeclaration, depth: number): I
   return foundAny ? { properties, required } : null;
 }
 
-function buildSchemaFromInterface(iface: InterfaceDeclaration, depth: number): InlineSchema {
+function buildSchemaFromInterface(
+  iface: InterfaceDeclaration,
+  depth: number,
+  substitution: Map<string, Type> = new Map(),
+): InlineSchema {
   const properties: Record<string, SchemaProperty> = {};
   const required: string[] = [];
 
@@ -345,7 +364,7 @@ function buildSchemaFromInterface(iface: InterfaceDeclaration, depth: number): I
       try {
         const name = prop.getName();
         const isOptional = prop.hasQuestionToken();
-        properties[name] = typeToSchemaProperty(prop.getType(), depth);
+        properties[name] = typeToSchemaProperty(prop.getType(), depth, substitution);
         if (!isOptional) required.push(name);
       } catch {
         // skip unresolvable property
@@ -562,6 +581,23 @@ function resolveUnionOfNamedTypes(type: Type, isArray: boolean, forResponse: boo
  * has no validation concept at all, so the full type is the only sensible
  * schema.
  */
+/**
+ * Maps a generic type's declared parameter names (e.g. `T`) to their instantiated
+ * type arguments at this call site (e.g. `UserDto` in `PaginatedResponse<UserDto>`),
+ * so nested properties like `items: T[]` resolve to the real type instead of a bare
+ * `{ type: 'object' }`. Empty when the type isn't generic, or is referenced without
+ * `<...>` (bare, unresolvable type arguments).
+ */
+function typeParamSubstitution(declaration: ClassDeclaration | InterfaceDeclaration, type: Type): Map<string, Type> {
+  const substitution = new Map<string, Type>();
+  const typeParams = declaration.getTypeParameters();
+  const typeArgs = type.getTypeArguments();
+  typeParams.forEach((tp, i) => {
+    if (typeArgs[i]) substitution.set(tp.getName(), typeArgs[i]);
+  });
+  return substitution;
+}
+
 function resolveNamedType(type: Type, isArray: boolean, forResponse = false): ResponseTypeInfo | null {
   try {
     if (type.isUnion()) return resolveUnionOfNamedTypes(type, isArray, forResponse);
@@ -589,16 +625,25 @@ function resolveNamedType(type: Type, isArray: boolean, forResponse = false): Re
 
     const isInterface = declarations[0].getKind() === SyntaxKind.InterfaceDeclaration;
 
-    const inlineSchema = isInterface ? buildSchemaFromInterface(declarations[0] as InterfaceDeclaration, 0) : undefined;
-
     const classDeclaration =
       !isInterface && declarations[0].getKind() === SyntaxKind.ClassDeclaration
         ? (declarations[0] as ClassDeclaration)
         : undefined;
+
+    const substitution = isInterface
+      ? typeParamSubstitution(declarations[0] as InterfaceDeclaration, type)
+      : classDeclaration
+        ? typeParamSubstitution(classDeclaration, type)
+        : new Map<string, Type>();
+
+    const inlineSchema = isInterface
+      ? buildSchemaFromInterface(declarations[0] as InterfaceDeclaration, 0, substitution)
+      : undefined;
+
     const classSchema = classDeclaration
       ? (buildSchemaFromClass(classDeclaration) ??
         (forResponse && !classHasApiProperty(classDeclaration)
-          ? (buildSchemaFromClassProperties(classDeclaration, 0) ?? undefined)
+          ? (buildSchemaFromClassProperties(classDeclaration, 0, substitution) ?? undefined)
           : undefined))
       : undefined;
 

@@ -214,6 +214,176 @@ describe('extractMethods() — class-based response entities with no class-valid
   });
 });
 
+describe('extractMethods() — generic response types', () => {
+  it('substitutes a primitive type argument into a generic class property', () => {
+    const methods = extractFromSource(
+      `
+      export class PaginatedResponse<T> {
+        items: T[];
+        total: number;
+      }
+
+      @Controller('items')
+      export class ItemsController {
+        @Get()
+        findAll(): Promise<PaginatedResponse<string>> {
+          return null as any;
+        }
+      }
+      `,
+      'ItemsController',
+    );
+
+    const responseType = methods[0].responseType;
+    expect(responseType).not.toBeNull();
+    expect(responseType!.name).toBe('PaginatedResponse');
+    expect(responseType!.classSchema).toEqual({
+      properties: {
+        items: { type: 'array', items: { type: 'string' } },
+        total: { type: 'number' },
+      },
+      required: ['items', 'total'],
+    });
+  });
+
+  it('substitutes an interface type argument, inlining its properties', () => {
+    const methods = extractFromSource(
+      `
+      export interface UserDto { id: string; name: string; }
+
+      export class PaginatedResponse<T> {
+        items: T[];
+      }
+
+      @Controller('items')
+      export class ItemsController {
+        @Get()
+        findAll(): Promise<PaginatedResponse<UserDto>> {
+          return null as any;
+        }
+      }
+      `,
+      'ItemsController',
+    );
+
+    const responseType = methods[0].responseType;
+    expect(responseType!.classSchema).toEqual({
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { id: { type: 'string' }, name: { type: 'string' } },
+            required: ['id', 'name'],
+          },
+        },
+      },
+      required: ['items'],
+    });
+  });
+
+  it('falls back to a bare object for a class type argument (known limitation, not a regression)', () => {
+    const methods = extractFromSource(
+      `
+      export class UserEntity { id: string; name: string; }
+
+      export class PaginatedResponse<T> {
+        items: T[];
+      }
+
+      @Controller('items')
+      export class ItemsController {
+        @Get()
+        findAll(): Promise<PaginatedResponse<UserEntity>> {
+          return null as any;
+        }
+      }
+      `,
+      'ItemsController',
+    );
+
+    const responseType = methods[0].responseType;
+    // Classes are never inlined into nested properties (only the top-level
+    // return type gets its own classSchema) — same behavior a non-generic
+    // nested class property already has today, generics included.
+    expect(responseType!.classSchema).toEqual({
+      properties: { items: { type: 'array', items: { type: 'object' } } },
+      required: ['items'],
+    });
+  });
+
+  it('leaves a non-generic class response type unaffected', () => {
+    const methods = extractFromSource(
+      `
+      export class UserEntity {
+        id: string;
+        name: string;
+      }
+
+      @Controller('users')
+      export class UsersController {
+        @Get()
+        findAll(): Promise<UserEntity> {
+          return null as any;
+        }
+      }
+      `,
+      'UsersController',
+    );
+
+    const responseType = methods[0].responseType;
+    expect(responseType!.classSchema).toEqual({
+      properties: { id: { type: 'string' }, name: { type: 'string' } },
+      required: ['id', 'name'],
+    });
+  });
+
+  it('resolves each union branch of a generic independently, without cross-branch leakage', () => {
+    const methods = extractFromSource(
+      `
+      export interface A { id: string; }
+      export interface B { id: string; role: string; }
+
+      export class PaginatedResponse<T> {
+        items: T[];
+      }
+
+      @Controller('items')
+      export class ItemsController {
+        @Get()
+        findAll(): Promise<PaginatedResponse<A> | PaginatedResponse<B>> {
+          return null as any;
+        }
+      }
+      `,
+      'ItemsController',
+    );
+
+    const responseType = methods[0].responseType;
+    expect(responseType!.unionMembers).toHaveLength(2);
+    const [a, b] = responseType!.unionMembers!;
+    expect(a.classSchema).toEqual({
+      properties: {
+        items: { type: 'array', items: { type: 'object', properties: { id: { type: 'string' } }, required: ['id'] } },
+      },
+      required: ['items'],
+    });
+    expect(b.classSchema).toEqual({
+      properties: {
+        items: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: { id: { type: 'string' }, role: { type: 'string' } },
+            required: ['id', 'role'],
+          },
+        },
+      },
+      required: ['items'],
+    });
+  });
+});
+
 describe('extractMethods() — literal union properties on interface DTOs', () => {
   it('collapses a string-literal union property to a string enum', () => {
     const methods = extractFromSource(
