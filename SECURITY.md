@@ -7,10 +7,10 @@ There's no LTS branch — this package follows `semantic-release`, and fixes
 ship as a new patch/minor release rather than being backported to older
 versions.
 
-| Version   | Supported |
-| --------- | --------- |
-| latest    | ✅        |
-| < latest  | ❌        |
+| Version  | Supported |
+| -------- | --------- |
+| latest   | ✅        |
+| < latest | ❌        |
 
 ## Reporting a Vulnerability
 
