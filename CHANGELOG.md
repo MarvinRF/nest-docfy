@@ -1,3 +1,16 @@
+# [0.18.0](https://github.com/MarvinRF/nest-docfy/compare/v0.17.0...v0.18.0) (2026-08-07)
+
+
+### Bug Fixes
+
+* **cli:** resolve generic type arguments when inferring response schemas ([077fdb1](https://github.com/MarvinRF/nest-docfy/commit/077fdb107697b8d92394bab399435f90d2d30988))
+* **deps:** pin js-yaml >=4.3.1 via overrides, fix SECURITY.md formatting ([881f0f9](https://github.com/MarvinRF/nest-docfy/commit/881f0f910ae232b464410a7a9f3adb6540443990))
+
+
+### Features
+
+* **cli:** document file-upload endpoints automatically ([498c7b6](https://github.com/MarvinRF/nest-docfy/commit/498c7b62daa64e7ef69c5df5ba4906f57e43ac3c))
+
 # [0.17.0](https://github.com/MarvinRF/nest-docfy/compare/v0.16.1...v0.17.0) (2026-08-06)
 
 
