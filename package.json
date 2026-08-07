@@ -77,6 +77,9 @@
     "url": "https://github.com/MarvinRF/nest-docfy/issues"
   },
   "license": "MIT",
+  "publishConfig": {
+    "provenance": true
+  },
   "peerDependencies": {
     "@fastify/static": "^8.0.0 || ^9.0.0",
     "@nestjs/common": ">=9.0.0",
