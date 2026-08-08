@@ -120,7 +120,7 @@
   "dependencies": {
     "commander": "^14.0.3",
     "docfy-core": "^0.6.0",
-    "docfy-ui": "^0.8.0",
+    "docfy-ui": "^0.10.0",
     "express": "^5.0.0",
     "openapi-typescript": "^7.13.0",
     "picocolors": "^1.1.1",
