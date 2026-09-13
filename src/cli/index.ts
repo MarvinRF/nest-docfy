@@ -518,9 +518,15 @@ program
 
       for (const issue of issues) {
         if (issue.kind === 'missing-file') {
-          log('error', `${issue.controllerClass}: no companion docs file found at ${issue.docsFile}`);
+          log(
+            'error',
+            `${issue.controllerClass} (${issue.controllerFile}): no companion docs file found at ${issue.docsFile}`,
+          );
         } else {
-          log('error', `${issue.controllerClass}: undocumented methods: ${issue.methods!.join(', ')}`);
+          log(
+            'error',
+            `${issue.controllerClass} (${issue.controllerFile}): undocumented methods: ${issue.methods!.join(', ')}`,
+          );
           log('info', `  → run ${pc.cyan('nestjs-docfy generate --force')} to merge new methods`);
         }
       }
@@ -653,9 +659,15 @@ program
       } else {
         for (const issue of report.controllerIssues) {
           if (issue.kind === 'missing-file') {
-            log('error', `${issue.controllerClass}: no companion docs file found at ${issue.docsFile}`);
+            log(
+              'error',
+              `${issue.controllerClass} (${issue.controllerFile}): no companion docs file found at ${issue.docsFile}`,
+            );
           } else {
-            log('error', `${issue.controllerClass}: undocumented methods: ${issue.methods!.join(', ')}`);
+            log(
+              'error',
+              `${issue.controllerClass} (${issue.controllerFile}): undocumented methods: ${issue.methods!.join(', ')}`,
+            );
             log('info', `  → run ${pc.cyan('nestjs-docfy generate --force')} to merge new methods`);
           }
         }

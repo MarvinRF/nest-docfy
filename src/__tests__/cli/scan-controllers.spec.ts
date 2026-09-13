@@ -1,5 +1,5 @@
 import path from 'path';
-import { scanApp, deriveDocsFilePath } from '../../cli/scan-controllers';
+import { scanApp, scanAllApps, deriveDocsFilePath } from '../../cli/scan-controllers';
 import type { ProjectApp } from '../../cli/project-types';
 
 const SCAN_ROOT = path.join(__dirname, 'fixtures', 'scan');
@@ -275,5 +275,44 @@ describe('scanApp()', () => {
       expect(r.errors.length).toBeGreaterThan(0);
       expect(r.controllers).toHaveLength(0);
     });
+  });
+});
+
+describe('scanApp() / scanAllApps() — sibling-app leak (Achado 3)', () => {
+  // A monorepo-wide base tsconfig with a broad `include` (inherited via
+  // `extends` into every per-app tsconfig) makes each app's ts-morph Project
+  // resolve every OTHER app's controllers too, not just its own — see
+  // fixtures/sibling-leak/tsconfig.json's `"include": ["apps/**/*.ts"]`.
+  const ROOT = path.join(__dirname, 'fixtures', 'sibling-leak');
+  const appA: ProjectApp = {
+    name: 'a',
+    root: path.join(ROOT, 'apps/a'),
+    tsconfig: path.join(ROOT, 'apps/a/tsconfig.app.json'),
+    controllerGlob: '**/*.controller.ts',
+  };
+  const appB: ProjectApp = {
+    name: 'b',
+    root: path.join(ROOT, 'apps/b'),
+    tsconfig: path.join(ROOT, 'apps/b/tsconfig.app.json'),
+    controllerGlob: '**/*.controller.ts',
+  };
+
+  it('without otherAppRoots, a single app scan leaks the sibling app controller (documents the raw tsconfig behavior)', () => {
+    const r = scanApp(appA, ROOT, undefined, 'ts');
+    const names = r.controllers.map((c) => c.className);
+    expect(names).toEqual(expect.arrayContaining(['AController', 'BController']));
+  });
+
+  it('passing otherAppRoots excludes controllers under a sibling app root', () => {
+    const r = scanApp(appA, ROOT, undefined, 'ts', [appB.root]);
+    const names = r.controllers.map((c) => c.className);
+    expect(names).toContain('AController');
+    expect(names).not.toContain('BController');
+  });
+
+  it('scanAllApps() reports each controller exactly once across apps, not once per app', () => {
+    const r = scanAllApps([appA, appB], ROOT, undefined, 'ts');
+    expect(r.controllers).toHaveLength(2);
+    expect(r.controllers.map((c) => c.className).sort()).toEqual(['AController', 'BController']);
   });
 });

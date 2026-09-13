@@ -69,9 +69,11 @@ export function scanApp(
   projectRoot: string,
   patternOverride: string | undefined,
   format: 'ts' | 'js',
+  otherAppRoots: string[] = [],
 ): ScanResult {
   const controllers: ControllerInfo[] = [];
   const errors: ScanError[] = [];
+  const normalizedOtherRoots = otherAppRoots.map((r) => path.resolve(r));
 
   let project: Project;
   try {
@@ -105,6 +107,19 @@ export function scanApp(
     try {
       assertWithinRoot(real, projectRoot);
     } catch {
+      return false;
+    }
+
+    // Exclude files under a sibling app's own root. A tsconfig whose
+    // `include` is broader than its app directory (e.g. a monorepo-wide base
+    // tsconfig some projects add for editor tooling, inherited via
+    // `extends`) otherwise makes every app's scan also pick up every OTHER
+    // app's controllers — duplicating them across apps, and silently
+    // conflating two same-named classes from different apps (e.g. a gateway
+    // and the service it proxies both having an `AuthController`) into one
+    // apparent controller in `check`/`generate` output. Files outside every
+    // app's root (shared libs) are unaffected and still scanned normally.
+    if (normalizedOtherRoots.some((root) => real === root || real.startsWith(root + path.sep))) {
       return false;
     }
 
@@ -190,7 +205,8 @@ export function scanAllApps(
   const projectsByControllerPath = new Map<string, Project>();
 
   for (const app of apps) {
-    const result = scanApp(app, projectRoot, patternOverride, format);
+    const otherAppRoots = apps.filter((a) => a !== app).map((a) => a.root);
+    const result = scanApp(app, projectRoot, patternOverride, format, otherAppRoots);
     allControllers.push(...result.controllers);
     allErrors.push(...result.errors);
     for (const [filePath, project] of result.projectsByControllerPath) {
