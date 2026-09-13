@@ -118,7 +118,7 @@
     "typescript-eslint": "^8.65.0"
   },
   "dependencies": {
-    "commander": "^14.0.3",
+    "commander": "^15.0.0",
     "docfy-core": "^0.6.0",
     "docfy-ui": "^0.8.0",
     "express": "^5.0.0",
