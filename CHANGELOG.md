@@ -1,3 +1,13 @@
+## [0.18.1](https://github.com/MarvinRF/nest-docfy/compare/v0.18.0...v0.18.1) (2026-09-13)
+
+
+### Bug Fixes
+
+* **cli:** resolve Nest CLI monorepo bootstrap file via its own sourceRoot ([4529397](https://github.com/MarvinRF/nest-docfy/commit/4529397601deac7116cb17e297c054b4cb2a5c3e))
+* **cli:** scope check/coverage/patch-spec method lookup to the matching class ([2ca9489](https://github.com/MarvinRF/nest-docfy/commit/2ca948926e6455967ac69b9827a498d9481c07bd))
+* **cli:** scope docs() merge/append/overwrite to the matching class ([a63e04e](https://github.com/MarvinRF/nest-docfy/commit/a63e04e4ca33c53bec50044ed1028d237b314367))
+* **cli:** stop each app's scan from leaking into sibling apps ([67c00b5](https://github.com/MarvinRF/nest-docfy/commit/67c00b55fbab03214c87db31688c918c1bdbecb1))
+
 # [0.18.0](https://github.com/MarvinRF/nest-docfy/compare/v0.17.0...v0.18.0) (2026-08-07)
 
 
