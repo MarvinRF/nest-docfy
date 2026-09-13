@@ -1,5 +1,6 @@
 import { Project, SourceFile, SyntaxKind } from 'ts-morph';
 import { evaluateDecoratorCall, DecoratorCall } from './eval-decorator-args';
+import { findDocsCallForClass, findFirstDocsCall, findAllDocsCalls } from './find-docs-call';
 
 export interface ExtractedDocsConfig {
   classDecorators: DecoratorCall[];
@@ -37,9 +38,19 @@ export interface DocsFileProjectContext {
  * structure, but a decorator argument referencing an imported symbol will
  * never resolve (see `DocsFileProjectContext`). Pass `context` to fix that.
  *
- * Returns null if the file can't be parsed or no `docs(...)` call is found.
+ * `className`, when given, scopes extraction to the `docs(ClassName, {...})`
+ * call for that specific class — needed as soon as a companion file can hold
+ * more than one `docs()` call (see `findDocsCallForClass`). Omitted, the
+ * first `docs()` call in the file is used, matching the pre-multi-class
+ * behavior for the common single-controller-per-file case.
+ *
+ * Returns null if the file can't be parsed or no matching `docs(...)` call is found.
  */
-export function extractDocsConfig(sourceText: string, context?: DocsFileProjectContext): ExtractedDocsConfig | null {
+export function extractDocsConfig(
+  sourceText: string,
+  context?: DocsFileProjectContext,
+  className?: string,
+): ExtractedDocsConfig | null {
   let project: Project;
   if (context) {
     project = context.project;
@@ -60,13 +71,18 @@ export function extractDocsConfig(sourceText: string, context?: DocsFileProjectC
     return null;
   }
 
-  const docsCall = sf.getDescendantsOfKind(SyntaxKind.CallExpression).find((call) => {
-    try {
-      return call.getExpression().getText() === 'docs';
-    } catch {
-      return false;
-    }
-  });
+  // Exact match by class name first. Falling back to "the only docs() call in
+  // the file" when that fails (rather than returning null outright) keeps
+  // single-controller files working even when the call's first argument
+  // doesn't literally read as `className` — an aliased import
+  // (`import { UsersController as UC } ...; docs(UC, {...})`) being the real
+  // case this covers. Ambiguity only exists once a file has 2+ calls, and
+  // there the exact match (or nothing) is all that's safe to use.
+  const allCalls = className ? findAllDocsCalls(sf) : undefined;
+  const docsCall =
+    (className ? findDocsCallForClass(sf, className) : undefined) ??
+    (allCalls && allCalls.size === 1 ? [...allCalls.values()][0] : undefined) ??
+    (className ? undefined : findFirstDocsCall(sf));
   if (!docsCall) return null;
 
   const args = docsCall.getArguments();

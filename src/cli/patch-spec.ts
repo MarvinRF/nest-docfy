@@ -95,7 +95,11 @@ export function computeSpecPatch(
     }
 
     const project = projectsByControllerPath?.get(ctrl.filePath);
-    const config = extractDocsConfig(content, project ? { project, absolutePath: docsPath } : undefined);
+    const config = extractDocsConfig(
+      content,
+      project ? { project, absolutePath: docsPath } : undefined,
+      ctrl.className,
+    );
     if (!config) {
       unparseableDocsFiles.push(docsPath);
       continue;

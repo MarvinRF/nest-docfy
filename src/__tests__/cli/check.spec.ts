@@ -247,4 +247,74 @@ describe('checkControllers()', () => {
     // The invalid method name fails IDENTIFIER_RE and is filtered out
     expect(issues).toHaveLength(0);
   });
+
+  // Achado 2: check/doctor didn't recognize a second/third docs() call in a
+  // companion file shared by several @Controller classes — every class past
+  // the first was reported as 100% undocumented even when its own call was
+  // complete and correct.
+  it('recognizes a second class documented in the same companion file (multi-controller file)', () => {
+    fs.writeFileSync(
+      DOCS_PATH,
+      [
+        "import { docs } from 'nestjs-docfy';",
+        'docs(CasosController, {',
+        '  methods: { criar: [] },',
+        '});',
+        'docs(WebhookController, {',
+        '  methods: { receber: [] },',
+        '});',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const casos = makeCtrl({
+      className: 'CasosController',
+      filePath: DOCS_PATH.replace('.docs.ts', '.ts'),
+      hasDocsFile: true,
+      methods: [makeMethod('criar', 'Post')],
+    });
+    const webhook = makeCtrl({
+      className: 'WebhookController',
+      filePath: DOCS_PATH.replace('.docs.ts', '.ts'),
+      hasDocsFile: true,
+      methods: [makeMethod('receber', 'Post')],
+    });
+
+    const issues = checkControllers([casos, webhook], 'ts');
+    expect(issues).toHaveLength(0);
+  });
+
+  it('still reports a real gap on the second class in a multi-controller file, scoped to its own methods', () => {
+    fs.writeFileSync(
+      DOCS_PATH,
+      [
+        "import { docs } from 'nestjs-docfy';",
+        'docs(CasosController, {',
+        '  methods: { criar: [] },',
+        '});',
+        'docs(WebhookController, {',
+        '  methods: {},',
+        '});',
+      ].join('\n'),
+      'utf8',
+    );
+
+    const casos = makeCtrl({
+      className: 'CasosController',
+      filePath: DOCS_PATH.replace('.docs.ts', '.ts'),
+      hasDocsFile: true,
+      methods: [makeMethod('criar', 'Post')],
+    });
+    const webhook = makeCtrl({
+      className: 'WebhookController',
+      filePath: DOCS_PATH.replace('.docs.ts', '.ts'),
+      hasDocsFile: true,
+      methods: [makeMethod('receber', 'Post')],
+    });
+
+    const issues = checkControllers([casos, webhook], 'ts');
+    expect(issues).toHaveLength(1);
+    expect(issues[0].controllerClass).toBe('WebhookController');
+    expect(issues[0].methods).toEqual(['receber']);
+  });
 });

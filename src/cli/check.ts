@@ -1,5 +1,6 @@
 import fs from 'fs';
 import { deriveDocsFilePath } from './scan-controllers';
+import { extractDocsConfig } from './extract-docs-config';
 import type { ControllerInfo } from './extract-methods';
 
 export interface CheckIssue {
@@ -11,40 +12,21 @@ export interface CheckIssue {
   methods?: string[];
 }
 
-/**
- * Extracts the set of method names that are present in a docs file.
- * Matches the pattern used by generate-file: two-space indented keys followed by `: [`.
- * e.g.   findAll: [
- * Only identifiers matching /^[$_a-zA-Z][$_a-zA-Z0-9]*$/ are accepted.
- */
+/** Only identifiers matching this are ever returned — whitelist against a crafted docs file. */
 const IDENTIFIER_RE = /^[$_a-zA-Z][$_a-zA-Z0-9]*$/;
-const METHOD_BLOCK_RE = /^\s+([$_a-zA-Z][$_a-zA-Z0-9]*)\s*:\s*\[/gm;
 
 /**
- * Extracts the text inside the `methods: { ... }` block of a docs file.
- * Returns an empty string if the block is not found.
- * Uses a simple brace-counter — does not parse TypeScript, but is sufficient
- * for the generated format produced by nestjs-docfy.
+ * Extracts the set of method names documented in a docs file.
+ *
+ * `className`, when given, scopes extraction to that specific class's
+ * `docs(ClassName, {...})` call — required as soon as a companion file can
+ * hold more than one call (a single source file exporting several
+ * `@Controller` classes). Without it, a naive "scan the file's methods
+ * block" reads only the FIRST call's methods and silently reports every
+ * other class in the file as having zero documented methods, even when each
+ * class's own call is complete and correct.
  */
-function extractMethodsSection(content: string): string {
-  const methodsIdx = content.indexOf('methods:');
-  if (methodsIdx === -1) return '';
-
-  const braceStart = content.indexOf('{', methodsIdx);
-  if (braceStart === -1) return '';
-
-  let depth = 0;
-  for (let i = braceStart; i < content.length; i++) {
-    if (content[i] === '{') depth++;
-    else if (content[i] === '}') {
-      depth--;
-      if (depth === 0) return content.slice(braceStart + 1, i);
-    }
-  }
-  return '';
-}
-
-export function getDocumentedMethods(docsFilePath: string): Set<string> {
+export function getDocumentedMethods(docsFilePath: string, className?: string): Set<string> {
   let content: string;
   try {
     content = fs.readFileSync(docsFilePath, 'utf8');
@@ -52,20 +34,10 @@ export function getDocumentedMethods(docsFilePath: string): Set<string> {
     return new Set();
   }
 
-  // Only scan the methods block — avoids false positives from classDecorators, etc.
-  const methodsSection = extractMethodsSection(content);
-  const documented = new Set<string>();
-  let match: RegExpExecArray | null;
-  METHOD_BLOCK_RE.lastIndex = 0;
-  while ((match = METHOD_BLOCK_RE.exec(methodsSection)) !== null) {
-    const name = match[1];
-    // Whitelist: only valid identifiers — prevents any crafted file from
-    // injecting unexpected names into the result set
-    if (IDENTIFIER_RE.test(name)) {
-      documented.add(name);
-    }
-  }
-  return documented;
+  const config = extractDocsConfig(content, undefined, className);
+  if (!config) return new Set();
+
+  return new Set(Object.keys(config.methods).filter((name) => IDENTIFIER_RE.test(name)));
 }
 
 /**
@@ -95,7 +67,7 @@ export function checkControllers(controllers: ControllerInfo[], format: 'ts' | '
       continue;
     }
 
-    const documented = getDocumentedMethods(docsFile);
+    const documented = getDocumentedMethods(docsFile, ctrl.className);
 
     const undocumented = ctrl.methods
       .filter((m) => m.httpDecorator !== null) // only HTTP-mapped methods

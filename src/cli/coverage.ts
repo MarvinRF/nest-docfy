@@ -26,7 +26,7 @@ export function computeCoverage(controllers: ControllerInfo[], format: 'ts' | 'j
 
     if (ctrl.hasDocsFile) {
       const docsFile = deriveDocsFilePath(ctrl.filePath, format);
-      const documented = getDocumentedMethods(docsFile);
+      const documented = getDocumentedMethods(docsFile, ctrl.className);
       documentedEndpoints += httpMethods.filter((m) => documented.has(m.name)).length;
     }
   }
