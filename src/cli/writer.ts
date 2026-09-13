@@ -2,11 +2,11 @@ import fs from 'fs';
 import path from 'path';
 import { assertWithinRoot } from './parse-args';
 import { renderDocsFile } from './generate-file';
-import { mergeDocsFile } from './merge-docs';
+import { mergeDocsFile, classHasDocsCall, hasOtherClassDocsCall, appendDocsCall, replaceDocsCall } from './merge-docs';
 import { deriveDocsFilePath } from './scan-controllers';
 import type { ControllerInfo } from './extract-methods';
 
-export type WriteOutcome = 'created' | 'skipped' | 'merged' | 'overwritten' | 'dry' | 'error';
+export type WriteOutcome = 'created' | 'appended' | 'skipped' | 'merged' | 'overwritten' | 'dry' | 'error';
 
 export interface WriteResult {
   controllerClass: string;
@@ -44,7 +44,19 @@ function resolveOutputPath(ctrl: ControllerInfo, opts: WriterOptions): string {
 
 /**
  * Writes (or previews) the docs file for a single controller.
- * Handles: create, skip, merge (--force), dry-run.
+ * Handles: create, append, skip, merge (--force), overwrite, dry-run.
+ *
+ * "Exists" is tracked per-CLASS, not per-file: a companion file can hold one
+ * `docs(Class, {...})` call per `@Controller` class in the source file it
+ * mirrors (a single file exporting several controllers is a normal
+ * pattern), so a file that's on disk but doesn't yet document THIS class is
+ * treated the same as a brand-new file for this class — new content gets
+ * appended alongside whatever the file already documents, never dropped via
+ * a full-file overwrite. Without this distinction, the 2nd/3rd controller in
+ * a shared file used to be reported "already exists" the moment the 1st
+ * controller's own write created the file, and `--force` would then merge
+ * that controller's methods into the FIRST class's `docs()` call instead of
+ * creating its own.
  */
 export function writeDocsFile(ctrl: ControllerInfo, opts: WriterOptions): WriteResult {
   let docsFilePath: string;
@@ -60,15 +72,6 @@ export function writeDocsFile(ctrl: ControllerInfo, opts: WriterOptions): WriteR
     };
   }
 
-  const exists = (() => {
-    try {
-      fs.accessSync(docsFilePath);
-      return true;
-    } catch {
-      return false;
-    }
-  })();
-
   // --- DRY RUN ---
   if (opts.dryRun) {
     const content = renderDocsFile(ctrl, docsFilePath, opts.format);
@@ -79,35 +82,75 @@ export function writeDocsFile(ctrl: ControllerInfo, opts: WriterOptions): WriteR
     return { controllerClass: ctrl.className, docsFilePath, outcome: 'dry' };
   }
 
-  // --- SKIP (file exists, neither --force nor --overwrite) ---
-  if (exists && !opts.force && !opts.overwrite) {
+  let existingContent: string | null;
+  try {
+    existingContent = fs.readFileSync(docsFilePath, 'utf8');
+  } catch {
+    existingContent = null;
+  }
+
+  const classDocumented = existingContent !== null && classHasDocsCall(existingContent, ctrl.className);
+
+  const fail = (err: unknown): WriteResult => ({
+    controllerClass: ctrl.className,
+    docsFilePath,
+    outcome: 'error',
+    error: err instanceof Error ? err.message : String(err),
+  });
+
+  // --- SKIP (this class is already documented, neither --force nor --overwrite) ---
+  if (classDocumented && !opts.force && !opts.overwrite) {
     return { controllerClass: ctrl.className, docsFilePath, outcome: 'skipped' };
   }
 
-  // --- OVERWRITE (file exists + --overwrite: skip merge, regenerate from scratch) ---
-  if (exists && opts.overwrite) {
+  // --- APPEND (file exists but doesn't document this class yet — nothing to
+  //     merge/overwrite FOR THIS CLASS, and a full-file overwrite here would
+  //     destroy every other class already documented in the file) ---
+  if (existingContent !== null && !classDocumented) {
     try {
-      const dir = path.dirname(docsFilePath);
-      fs.mkdirSync(dir, { recursive: true });
-      const content = renderDocsFile(ctrl, docsFilePath, opts.format);
-      fs.writeFileSync(docsFilePath, content, 'utf8');
-      return { controllerClass: ctrl.className, docsFilePath, outcome: 'overwritten' };
+      const appended = appendDocsCall(existingContent, ctrl, docsFilePath, opts.format);
+      if (appended !== null) {
+        fs.writeFileSync(docsFilePath, appended, 'utf8');
+        return { controllerClass: ctrl.className, docsFilePath, outcome: 'appended' };
+      }
+      // Existing content unparseable — fall through to full create/overwrite below.
     } catch (err) {
-      return {
-        controllerClass: ctrl.className,
-        docsFilePath,
-        outcome: 'error',
-        error: err instanceof Error ? err.message : String(err),
-      };
+      return fail(err);
     }
   }
 
-  // --- MERGE (file exists + --force) ---
-  if (exists && opts.force) {
+  // --- OVERWRITE (file exists, --overwrite, this class already has a call) ---
+  // A file shared with OTHER classes must only have THIS class's call
+  // replaced (replaceDocsCall) — a plain full-file regenerate would destroy
+  // every sibling class's docs(). A single-class file has no such risk, so
+  // it keeps the simpler "regenerate the whole file from scratch" behavior
+  // (including dropping any stray content outside the docs() call itself,
+  // which --overwrite has always promised).
+  if (existingContent !== null && classDocumented && opts.overwrite) {
     try {
-      const existingContent = fs.readFileSync(docsFilePath, 'utf8');
-      const merged = mergeDocsFile(existingContent, ctrl);
+      if (hasOtherClassDocsCall(existingContent, ctrl.className)) {
+        const replaced = replaceDocsCall(existingContent, ctrl, docsFilePath, opts.format);
+        if (replaced !== null) {
+          fs.writeFileSync(docsFilePath, replaced, 'utf8');
+          return { controllerClass: ctrl.className, docsFilePath, outcome: 'overwritten' };
+        }
+        // Existing content unparseable — fall through to full create/overwrite below.
+      } else {
+        const dir = path.dirname(docsFilePath);
+        fs.mkdirSync(dir, { recursive: true });
+        const content = renderDocsFile(ctrl, docsFilePath, opts.format);
+        fs.writeFileSync(docsFilePath, content, 'utf8');
+        return { controllerClass: ctrl.className, docsFilePath, outcome: 'overwritten' };
+      }
+    } catch (err) {
+      return fail(err);
+    }
+  }
 
+  // --- MERGE (file exists, --force, this class already has a call) ---
+  if (existingContent !== null && classDocumented && opts.force) {
+    try {
+      const merged = mergeDocsFile(existingContent, ctrl);
       if (merged) {
         fs.writeFileSync(docsFilePath, merged.content, 'utf8');
         return {
@@ -119,16 +162,11 @@ export function writeDocsFile(ctrl: ControllerInfo, opts: WriterOptions): WriteR
       }
       // Merge failed (unparseable file) — fall through to full overwrite
     } catch (err) {
-      return {
-        controllerClass: ctrl.className,
-        docsFilePath,
-        outcome: 'error',
-        error: err instanceof Error ? err.message : String(err),
-      };
+      return fail(err);
     }
   }
 
-  // --- CREATE (new file, or full overwrite after failed merge) ---
+  // --- CREATE (new file, or fallback after a failed append/merge/replace) ---
   try {
     const dir = path.dirname(docsFilePath);
     fs.mkdirSync(dir, { recursive: true });
@@ -136,12 +174,7 @@ export function writeDocsFile(ctrl: ControllerInfo, opts: WriterOptions): WriteR
     fs.writeFileSync(docsFilePath, content, 'utf8');
     return { controllerClass: ctrl.className, docsFilePath, outcome: 'created' };
   } catch (err) {
-    return {
-      controllerClass: ctrl.className,
-      docsFilePath,
-      outcome: 'error',
-      error: err instanceof Error ? err.message : String(err),
-    };
+    return fail(err);
   }
 }
 

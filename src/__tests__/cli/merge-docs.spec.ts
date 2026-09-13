@@ -108,4 +108,68 @@ docs(UsersController, { classDecorators: [] });
     expect(result).not.toBeNull();
     expect(result!.content).toContain('findAll');
   });
+
+  // Achado 1: a companion file with more than one docs() call (a source file
+  // exporting several @Controller classes, e.g. an api-gateway grouping
+  // proxy controllers by domain) used to always merge into the FIRST call
+  // found, regardless of which class the new methods actually belong to.
+  describe('multi-class companion file (Achado 1)', () => {
+    const MULTI = `
+import { docs } from 'nestjs-docfy';
+import { CasosController, WebhookController } from './agente-ia.controller';
+
+docs(CasosController, {
+  classDecorators: [
+    ApiTags('casos'),
+  ],
+  methods: {
+    criar: [
+      ApiOperation({ summary: 'Criar' }),
+    ],
+  },
+});
+
+docs(WebhookController, {
+  classDecorators: [
+    ApiTags('webhook'),
+  ],
+  methods: {},
+});
+`.trim();
+
+    function makeWebhookCtrl(methodNames: string[]) {
+      const ctrl = makeCtrl(methodNames);
+      ctrl.className = 'WebhookController';
+      return ctrl;
+    }
+
+    it('merges a new method into the matching class only, not the first docs() call in the file', () => {
+      const result = mergeDocsFile(MULTI, makeWebhookCtrl(['receber']))!;
+      expect(result).not.toBeNull();
+      expect(result.addedMethods).toEqual(['receber']);
+
+      // `receber` must land inside WebhookController's own methods object —
+      // not inside CasosController's, which would fail to type-check
+      // ("Object literal may only specify known properties").
+      const webhookBlock = result.content.slice(result.content.indexOf('docs(WebhookController'));
+      expect(webhookBlock).toContain('receber');
+
+      const casosBlock = result.content.slice(0, result.content.indexOf('docs(WebhookController'));
+      expect(casosBlock).not.toContain('receber');
+      expect(casosBlock).toContain('criar');
+    });
+
+    it('leaves the other class entirely untouched', () => {
+      const result = mergeDocsFile(MULTI, makeWebhookCtrl(['receber']))!;
+      expect(result.content).toContain("ApiTags('casos')");
+      expect(result.content).toContain('criar');
+    });
+
+    it('returns null (not a wrong merge) when the class has no docs() call in the file at all', () => {
+      const ctrl = makeCtrl(['findAll']);
+      ctrl.className = 'SimuladorController';
+      const result = mergeDocsFile(MULTI, ctrl);
+      expect(result).toBeNull();
+    });
+  });
 });

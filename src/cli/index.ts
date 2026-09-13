@@ -132,6 +132,10 @@ function runPipeline(options: CliOptions, silent = false): number {
         log('success', `${r.controllerClass} → ${r.docsFilePath}  ${pc.green('[created]')}`);
         created++;
         break;
+      case 'appended':
+        log('success', `${r.controllerClass} → ${r.docsFilePath}  ${pc.green('[appended]')}`);
+        created++;
+        break;
       case 'merged':
         log(
           'success',
