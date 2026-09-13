@@ -335,6 +335,11 @@ program
       const context = detectProject(options.root, options.tsconfig);
 
       for (const app of context.apps) {
+        if (app.isLibrary) {
+          log('skip', `${app.name} → ${pc.gray('[library project, no bootstrap file — skipped]')}`);
+          continue;
+        }
+
         if (!app.entryFile) {
           log(
             'warn',

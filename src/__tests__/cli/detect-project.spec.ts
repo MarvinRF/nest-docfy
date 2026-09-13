@@ -112,6 +112,29 @@ describe('detectProject() — Nest CLI monorepo', () => {
     const admin = ctx.apps.find((a) => a.name === 'admin')!;
     expect(admin.entryFile).toBeUndefined();
   });
+
+  it('resolves entryFile via sourceRoot when both entryFile and sourceRoot are explicit (real `nest g app` shape)', () => {
+    // Regression: nest-cli.json entries always set entryFile:"main" explicitly
+    // alongside sourceRoot — joining entryFile straight onto `root` (skipping
+    // sourceRoot) used to drop the "src/" segment and fail to resolve for
+    // every project, every time.
+    const ctx = detectProject(fix('nest-cli-sourceroot'));
+    const worker = ctx.apps.find((a) => a.name === 'worker')!;
+    expect(worker.entryFile).toBe(path.join(fix('nest-cli-sourceroot'), 'apps/worker/src/main.ts'));
+  });
+
+  it('marks a "type": "library" project as isLibrary and does not require a bootstrap file', () => {
+    const ctx = detectProject(fix('nest-cli-sourceroot'));
+    const shared = ctx.apps.find((a) => a.name === 'shared')!;
+    expect(shared.isLibrary).toBe(true);
+    expect(shared.entryFile).toBeUndefined();
+  });
+
+  it('does not mark an application project as isLibrary', () => {
+    const ctx = detectProject(fix('nest-cli-sourceroot'));
+    const worker = ctx.apps.find((a) => a.name === 'worker')!;
+    expect(worker.isLibrary).toBeFalsy();
+  });
 });
 
 describe('detectProject() — generic monorepo', () => {

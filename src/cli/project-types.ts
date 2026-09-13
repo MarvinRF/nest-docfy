@@ -11,6 +11,8 @@ export interface ProjectApp {
   controllerGlob: string;
   /** Absolute path to the app's bootstrap file (main.ts), when it could be resolved. */
   entryFile?: string;
+  /** True for a library project (Nest CLI `"type": "library"`, NX `"projectType": "library"`) — never has a bootstrap file, by definition. */
+  isLibrary?: boolean;
 }
 
 export interface ProjectContext {
