@@ -25,6 +25,10 @@ const HOP_BY_HOP_HEADERS = new Set([
   // Always derived from the target URL by `http.request` — a client-supplied value would let the
   // caller address a different virtual host on an allowlisted IP, bypassing the origin check.
   'host',
+  // A target's cookies would otherwise be set on the docs origin — possibly the app's own,
+  // overwriting its real session. Browsers never expose Set-Cookie to fetch() anyway, and
+  // proxied requests don't carry the browser's cookies, so relaying it serves no purpose.
+  'set-cookie',
 ]);
 
 export const PROXY_ERROR_HEADER = 'x-docfy-proxy-error';

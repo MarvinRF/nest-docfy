@@ -154,6 +154,12 @@ describe('handleProxyRequest()', () => {
           });
           return;
         }
+        if (req.url === '/cookie') {
+          res.setHeader('Set-Cookie', 'session=attacker; Path=/');
+          res.setHeader('X-Kept', 'yes');
+          res.end('ok');
+          return;
+        }
         if (req.url === '/host') {
           res.end(req.headers.host ?? '');
           return;
@@ -187,6 +193,13 @@ describe('handleProxyRequest()', () => {
       expect(res.headers['x-echo-header']).toBe('hello');
       expect(JSON.parse(res.body!)).toEqual({ received: '{"a":1}', method: 'POST' });
       expect(res.headers[PROXY_ERROR_HEADER]).toBeUndefined();
+    });
+
+    it('drops Set-Cookie from the target response but keeps other headers', async () => {
+      const res = makeMockResponse();
+      await handleProxyRequest({ method: 'GET', url: `${origin}/cookie` }, new Set([origin]), res);
+      expect(res.headers['set-cookie']).toBeUndefined();
+      expect(res.headers['x-kept']).toBe('yes');
     });
 
     it('derives Host from the target URL, ignoring a client-supplied Host header', async () => {
