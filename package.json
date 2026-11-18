@@ -143,8 +143,8 @@
     "typescript-eslint": "^8.65.0"
   },
   "dependencies": {
-    "docfy-core": "^0.6.2",
-    "docfy-ui": "^0.11.1",
+    "docfy-core": "^0.7.0",
+    "docfy-ui": "^0.12.0",
     "source-map": "^0.6.1"
   },
   "overrides": {
