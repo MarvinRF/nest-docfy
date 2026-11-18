@@ -1,0 +1,32 @@
+name: Consumer audit
+
+# Weekly: installs the latest published nestjs-docfy into an empty project, the way a
+# consumer gets it (fresh resolution, not this repo's lockfile), and fails on any
+# high/critical production advisory. Catches advisories published after our last
+# release before consumers' own CI does. GitHub emails the workflow's last editor
+# when a scheduled run fails.
+on:
+  schedule:
+    - cron: '0 9 * * 1'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
+        with:
+          node-version: 22.x
+
+      - name: Install the latest release into an empty project
+        run: |
+          mkdir consumer && cd consumer
+          npm init -y > /dev/null
+          npm install --ignore-scripts --no-audit --no-fund nestjs-docfy@latest
+
+      - name: npm audit (production)
+        working-directory: consumer
+        run: npm audit --omit=dev --audit-level=high
