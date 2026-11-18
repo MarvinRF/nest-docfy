@@ -1,3 +1,4 @@
+import './assert-build-peers';
 import type * as ts from 'typescript';
 import path from 'path';
 import { generateDocfyMetadata } from './generate-metadata';

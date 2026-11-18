@@ -1,4 +1,4 @@
-import openapiTS, { astToString } from 'openapi-typescript';
+import { requireOptionalPeer } from '../optional-peer';
 import type { OpenApiDocument } from './merge-spec-patch';
 
 export interface ClientFiles {
@@ -28,6 +28,10 @@ export function createApiClient(baseUrl: string) {
  * the generated client.ts, so it belongs in the consuming project.
  */
 export async function buildClientFiles(document: OpenApiDocument): Promise<ClientFiles> {
+  const { default: openapiTS, astToString } = requireOptionalPeer<typeof import('openapi-typescript')>(
+    'openapi-typescript',
+    'nestjs-docfy generate-client',
+  );
   const ast = await openapiTS(document as any);
   const schema = astToString(ast);
   const client = buildClientWrapper('schema');

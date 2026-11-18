@@ -1,4 +1,5 @@
-import express from 'express';
+import type { Express, Request, Response } from 'express';
+import { requireOptionalPeer } from '../optional-peer';
 import { buildSchemaExample, normalizeDocument, pickPrimarySuccessResponse, uniqueEndpoints } from 'docfy-core';
 import type { Endpoint } from 'docfy-core';
 import type { OpenApiDocument } from './merge-spec-patch';
@@ -11,14 +12,9 @@ function toExpressPath(openApiPath: string): string {
   return openApiPath.replace(/\{([^}]+)\}/g, ':$1');
 }
 
-type ExpressRouteHandler = (req: express.Request, res: express.Response) => void;
+type ExpressRouteHandler = (req: Request, res: Response) => void;
 
-function registerRoute(
-  app: express.Express,
-  method: ExpressMethod,
-  expressPath: string,
-  handler: ExpressRouteHandler,
-): void {
+function registerRoute(app: Express, method: ExpressMethod, expressPath: string, handler: ExpressRouteHandler): void {
   switch (method) {
     case 'get':
       app.get(expressPath, handler);
@@ -44,7 +40,7 @@ function registerRoute(
   }
 }
 
-function registerMockRoute(app: express.Express, endpoint: Endpoint): void {
+function registerMockRoute(app: Express, endpoint: Endpoint): void {
   const method = endpoint.method.toLowerCase() as ExpressMethod;
   if (!EXPRESS_METHODS.includes(method)) return; // e.g. TRACE — not exposed by Express's routing API.
 
@@ -70,7 +66,7 @@ function registerMockRoute(app: express.Express, endpoint: Endpoint): void {
 }
 
 export interface MockApp {
-  app: express.Express;
+  app: Express;
   endpointCount: number;
 }
 
@@ -83,6 +79,7 @@ export interface MockApp {
  */
 export async function buildMockApp(rawDocument: OpenApiDocument): Promise<MockApp> {
   const document = await normalizeDocument(rawDocument);
+  const express = requireOptionalPeer<typeof import('express')>('express', 'nestjs-docfy mock');
   const app = express();
   const endpoints = uniqueEndpoints(document);
   for (const endpoint of endpoints) registerMockRoute(app, endpoint);
