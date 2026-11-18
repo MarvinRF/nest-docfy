@@ -1,3 +1,13 @@
+## [0.18.2](https://github.com/MarvinRF/nest-docfy/compare/v0.18.1...v0.18.2) (2026-11-18)
+
+
+### Bug Fixes
+
+* **deps:** require docfy-ui ^0.11.1 and docfy-core ^0.6.2 ([675e111](https://github.com/MarvinRF/nest-docfy/commit/675e1110e41044c4ee8f01bc608b7f47bab71252))
+* **deps:** support @fastify/static 10 and refresh lockfile ([3c9d657](https://github.com/MarvinRF/nest-docfy/commit/3c9d657f5076484a53a4d4f844e2e283b47b5d04))
+* **proxy:** cap the request envelope size and stop forwarding Host ([ac05cb2](https://github.com/MarvinRF/nest-docfy/commit/ac05cb20219484582c8531f298f8b311adf7fdea))
+* **runtime:** stop the runtime entry from loading ts-morph ([17aeb3a](https://github.com/MarvinRF/nest-docfy/commit/17aeb3a2dfe77ce5dbd9c2f7f96a8fa4b7d4f444))
+
 ## [0.18.1](https://github.com/MarvinRF/nest-docfy/compare/v0.18.0...v0.18.1) (2026-09-13)
 
 
