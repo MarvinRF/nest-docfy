@@ -11,11 +11,17 @@ name: docfy PR check (reusable)
 #
 #   jobs:
 #     docfy:
-#       uses: MarvinRF/nest-docfy/.github/workflows/docfy-pr-check-reusable.yml@main
+#       uses: MarvinRF/nest-docfy/.github/workflows/docfy-pr-check-reusable.yml@v0.18.2
 #       with:
 #         root: .                      # project root (default: repo root)
 #         export-entry: docfy-export.ts # optional: enables the spec diff step
 #         min-coverage: 80
+#         docfy-version: 0.18.2
+#         docfy-ref: v0.18.2
+#
+# Pin uses/docfy-version/docfy-ref to one release (or uses: to a commit SHA):
+# this job holds pull-requests: write in the consumer repo, so @main/latest
+# would run whatever lands here next, unreviewed.
 
 on:
   workflow_call:

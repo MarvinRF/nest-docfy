@@ -718,20 +718,25 @@ on:
 
 jobs:
   docfy:
-    uses: MarvinRF/nest-docfy/.github/workflows/docfy-pr-check-reusable.yml@main
+    uses: MarvinRF/nest-docfy/.github/workflows/docfy-pr-check-reusable.yml@v0.18.2
     with:
       root: . # project root, relative to your repo root (default: ".")
       export-entry: docfy-export.ts # optional — omit to skip the spec diff
       min-coverage: 80
+      docfy-version: 0.18.2 # pin the CLI run via npx
+      docfy-ref: v0.18.2 # pin the comment/diff scripts checked out from this repo
 ```
 
-| Input           | Default  | Description                                              |
-| --------------- | -------- | -------------------------------------------------------- |
-| `root`          | `.`      | Project root, relative to the repo root                  |
-| `export-entry`  | _(none)_ | Path to an export entry file; enables the spec-diff step |
-| `min-coverage`  | `80`     | Minimum coverage percentage, fails the job if below      |
-| `node-version`  | `22.x`   | Node.js version to run the checks with                   |
-| `docfy-version` | `latest` | `nestjs-docfy` npm dist-tag/version to run               |
+Pin all three to the same release, as above. The job runs with `pull-requests: write` on your repo, so referencing `@main` / `latest` means whatever lands on this repo's `main` or npm next runs in your CI unreviewed. For the strongest guarantee, pin `uses:` to a full commit SHA and let Dependabot (`package-ecosystem: github-actions`) propose upgrades.
+
+| Input           | Default  | Description                                                |
+| --------------- | -------- | ---------------------------------------------------------- |
+| `root`          | `.`      | Project root, relative to the repo root                    |
+| `export-entry`  | _(none)_ | Path to an export entry file; enables the spec-diff step   |
+| `min-coverage`  | `80`     | Minimum coverage percentage, fails the job if below        |
+| `node-version`  | `22.x`   | Node.js version to run the checks with                     |
+| `docfy-version` | `latest` | `nestjs-docfy` npm dist-tag/version to run                 |
+| `docfy-ref`     | `main`   | `nest-docfy` git ref to pull the comment/diff scripts from |
 
 The job fails if `check` finds drift or `coverage` is below `min-coverage`; the spec diff is informational only (breaking changes are sometimes intentional) and never fails the job on its own.
 
