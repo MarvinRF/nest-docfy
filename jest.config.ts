@@ -17,10 +17,14 @@ const config: Config = {
           experimentalDecorators: true,
           emitDecoratorMetadata: true,
           skipLibCheck: true,
+          allowJs: true,
         },
       },
     ],
   },
+  // @fastify/static 10 require()s the ESM-only content-disposition 3, which Node loads natively
+  // (require(esm)) but Jest 29's module runtime can't — transpile just that package to CJS.
+  transformIgnorePatterns: ['/node_modules/(?!(.*/)?content-disposition/)'],
   collectCoverageFrom: ['**/*.(t|j)s', '!**/__tests__/**'],
   coverageDirectory: '../coverage',
   testEnvironment: 'node',

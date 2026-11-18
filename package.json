@@ -81,7 +81,7 @@
     "provenance": true
   },
   "peerDependencies": {
-    "@fastify/static": "^8.0.0 || ^9.0.0",
+    "@fastify/static": "^8.0.0 || ^9.0.0 || ^10.1.11",
     "@nestjs/common": ">=9.0.0",
     "@nestjs/swagger": ">=6.0.0",
     "reflect-metadata": "^0.1.13 || ^0.2.0"
@@ -93,7 +93,7 @@
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
-    "@fastify/static": "^9.3.0",
+    "@fastify/static": "^10.1.11",
     "@nestjs/common": "^11.0.0",
     "@nestjs/core": "^11.0.0",
     "@nestjs/platform-fastify": "^11.1.28",

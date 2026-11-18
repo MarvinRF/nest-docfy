@@ -813,7 +813,7 @@ If the metadata file isn't found (e.g. the plugin isn't registered in `nest-cli.
 
 ### `DocfyUiModule.setup(mountPath, app, options?)`
 
-Serves [`docfy-ui`](https://www.npmjs.com/package/docfy-ui) (the AI-first documentation UI companion to this package) at `mountPath`, the same role `SwaggerModule.setup()` + `swagger-ui-express` play for raw Swagger UI. Works on both Express (`@nestjs/platform-express`) and Fastify (`@nestjs/platform-fastify`) apps. On Fastify, static asset serving needs the optional peer dependency [`@fastify/static`](https://www.npmjs.com/package/@fastify/static) (`npm install @fastify/static`), the same package `@nestjs/swagger` itself relies on for Fastify Swagger UI support.
+Serves [`docfy-ui`](https://www.npmjs.com/package/docfy-ui) (the AI-first documentation UI companion to this package) at `mountPath`, the same role `SwaggerModule.setup()` + `swagger-ui-express` play for raw Swagger UI. Works on both Express (`@nestjs/platform-express`) and Fastify (`@nestjs/platform-fastify`) apps. On Fastify, static asset serving needs the optional peer dependency [`@fastify/static`](https://www.npmjs.com/package/@fastify/static) (`npm install @fastify/static`), the same package `@nestjs/swagger` itself relies on for Fastify Swagger UI support. Versions 8, 9 and 10 are supported; prefer `^10.1.11`, which fixes a route-guard bypass via path traversal (GHSA-83w8-p2f5-377r) — note that v10 loads ESM-only dependencies through Node's native `require(esm)`, so it needs Node 20.19+ or 22.12+.
 
 ```ts
 import { NestFactory } from '@nestjs/core';
