@@ -11,13 +11,13 @@ name: docfy PR check (reusable)
 #
 #   jobs:
 #     docfy:
-#       uses: MarvinRF/nest-docfy/.github/workflows/docfy-pr-check-reusable.yml@v0.18.2
+#       uses: MarvinRF/nest-docfy/.github/workflows/docfy-pr-check-reusable.yml@v0.19.0
 #       with:
 #         root: .                      # project root (default: repo root)
 #         export-entry: docfy-export.ts # optional: enables the spec diff step
 #         min-coverage: 80
-#         docfy-version: 0.18.2
-#         docfy-ref: v0.18.2
+#         docfy-version: 0.19.0
+#         docfy-ref: v0.19.0
 #
 # Pin uses/docfy-version/docfy-ref to one release (or uses: to a commit SHA):
 # this job holds pull-requests: write in the consumer repo, so @main/latest
@@ -46,13 +46,17 @@ on:
         type: string
         default: '22.x'
       docfy-version:
-        description: 'nestjs-docfy npm dist-tag/version to run (via npx)'
+        description: >
+          Exact nestjs-docfy version to run (via npx), e.g. 0.19.0. Required: this job holds
+          pull-requests: write, so it must never float to whatever is published next.
         type: string
-        default: 'latest'
+        required: true
       docfy-ref:
-        description: 'nest-docfy git ref to pull the PR-comment/spec-diff scripts from'
+        description: >
+          nest-docfy git tag or commit SHA to pull the PR-comment/spec-diff scripts from, e.g.
+          v0.19.0. Required for the same reason as docfy-version.
         type: string
-        default: 'main'
+        required: true
 
 permissions:
   contents: read
@@ -61,6 +65,12 @@ permissions:
 jobs:
   docfy-check:
     runs-on: ubuntu-latest
+    # Inputs reach the shell only through env vars, never interpolated into `run:` scripts.
+    env:
+      DOCFY_PKG: nestjs-docfy@${{ inputs.docfy-version }}
+      DOCFY_ROOT: ${{ inputs.root }}
+      DOCFY_EXPORT_ENTRY: ${{ inputs.export-entry }}
+      DOCFY_MIN_COVERAGE: ${{ inputs.min-coverage }}
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
 
@@ -80,27 +90,34 @@ jobs:
         with:
           node-version: ${{ inputs.node-version }}
 
+      # Since 0.19 the CLI's build tooling is an optional peer, so npx installs it alongside.
+      - name: Prepare the docfy CLI
+        run: |
+          echo 'docfy() { npx -y -p "$DOCFY_PKG" -p ts-morph@^28 -p commander@^14 -p picocolors@^1 nestjs-docfy "$@"; }' > "$RUNNER_TEMP/docfy.sh"
+
       - name: Run check
-        run: npx -y nestjs-docfy@${{ inputs.docfy-version }} check --root ${{ inputs.root }} --json > check.json || true
+        run: |
+          . "$RUNNER_TEMP/docfy.sh"
+          docfy check --root "$DOCFY_ROOT" --json > check.json || true
 
       - name: Run coverage
         run: |
-          npx -y nestjs-docfy@${{ inputs.docfy-version }} coverage --root ${{ inputs.root }} \
-            --json --min ${{ inputs.min-coverage }} > coverage.json || true
+          . "$RUNNER_TEMP/docfy.sh"
+          docfy coverage --root "$DOCFY_ROOT" --json --min "$DOCFY_MIN_COVERAGE" > coverage.json || true
 
       - name: Export spec (PR head)
         if: inputs.export-entry != ''
         run: |
-          npm ci --prefix ${{ inputs.root }}
-          npx -y nestjs-docfy@${{ inputs.docfy-version }} export \
-            --entry ${{ inputs.export-entry }} --root ${{ inputs.root }} --out new-spec.json
+          . "$RUNNER_TEMP/docfy.sh"
+          npm ci --prefix "$DOCFY_ROOT"
+          docfy export --entry "$DOCFY_EXPORT_ENTRY" --root "$DOCFY_ROOT" --out new-spec.json
 
       - name: Export spec (PR base)
         if: inputs.export-entry != ''
         run: |
-          npm ci --prefix base-ref/${{ inputs.root }}
-          npx -y nestjs-docfy@${{ inputs.docfy-version }} export \
-            --entry ${{ inputs.export-entry }} --root base-ref/${{ inputs.root }} --out old-spec.json
+          . "$RUNNER_TEMP/docfy.sh"
+          npm ci --prefix "base-ref/$DOCFY_ROOT"
+          docfy export --entry "$DOCFY_EXPORT_ENTRY" --root "base-ref/$DOCFY_ROOT" --out old-spec.json
 
       - name: Diff specs
         if: inputs.export-entry != ''

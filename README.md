@@ -13,10 +13,15 @@ Keep your NestJS controllers clean. Swagger documentation lives in a dedicated c
 
 📖 **[Full documentation](https://www.nestdocfy.com/)**
 
+> [!IMPORTANT]
+> **0.19 is a security release with breaking changes.** Build tooling is no longer installed into production, the "Try it out" proxy stays off in production until you authorize who can use it, and the docs UI ships a strict Content-Security-Policy. Upgrading takes a few minutes: see [Migrating to 0.19](#migrating-to-019) and [Security](#security).
+
 ## Table of contents
 
 - [Motivation](#motivation)
 - [Installation](#installation)
+- [Security](#security)
+- [Migrating to 0.19](#migrating-to-019)
 - [Quick start](#quick-start)
   - [1. Import DocfyModule](#1-import-docfymodule)
   - [2. Mark your controllers](#2-mark-your-controllers)
@@ -124,6 +129,8 @@ docs(UsersController, {
 
 ## Installation
 
+Requires **Node.js 22.12 or newer** (older lines no longer get security patches).
+
 ```bash
 npm install nestjs-docfy
 ```
@@ -133,6 +140,69 @@ npm install nestjs-docfy
 ```bash
 npm install @nestjs/common @nestjs/swagger reflect-metadata
 ```
+
+**CLI and compiler plugin** — build-time only, so install them as dev dependencies:
+
+```bash
+npm install --save-dev ts-morph commander picocolors
+# only needed for `nestjs-docfy generate-client`:
+npm install --save-dev openapi-typescript
+```
+
+Since 0.19 these are optional peers instead of dependencies: an app that only uses the runtime module (`DocfyModule`, `DocfyUiModule`) no longer ships a TypeScript compiler and a glob stack to production, so advisories in that tooling can't reach your deploy. Running the CLI or the plugin without them prints the exact install command. `express` is an optional peer too; every Express-based Nest app already has it.
+
+## Security
+
+nestjs-docfy is secure by default. Anything that weakens a default has an explicit option name, so it shows up in code review.
+
+| Surface                                                | Default                                                                                                                  | Explicit opt-out                                  |
+| ------------------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------ | ------------------------------------------------- |
+| Build tooling in production                            | Not installed (optional peers)                                                                                           | —                                                 |
+| "Try it out" proxy with `NODE_ENV=production`          | **Disabled** unless `proxyAuthorize` is set                                                                              | `allowProxyInProduction: true`                    |
+| Proxy requests                                         | `Content-Type: application/json` only, body ≤ 10 MB, `Host` and `Set-Cookie` never relayed                               | —                                                 |
+| Proxy targets                                          | Only origins in the spec's `servers[]` plus `additionalProxyOrigins`; redirects are not followed                         | —                                                 |
+| Docs UI responses                                      | Strict CSP (`script-src 'self'`), `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer`, same-origin framing | `securityHeaders: false`, `contentSecurityPolicy` |
+| `nestjs-docfy test` and `docfy-mcp` contract tests     | Only `GET`/`HEAD`/`OPTIONS`; a non-localhost `--base-url` must be one of the spec's `servers`                            | `--allow-writes`, `--no-restrict-to-servers`      |
+| [Reusable PR-check workflow](#github-actions-pr-check) | `docfy-version` and `docfy-ref` are required, so the job never floats to `latest`/`main`                                 | —                                                 |
+
+**Nest guards don't run for the docs routes.** `DocfyUiModule.setup()` registers its routes on the raw HTTP adapter, outside Nest's request pipeline, the same way `SwaggerModule.setup()` does. To restrict who can open the docs, put a middleware in front of the mount path, registered before `setup()`:
+
+```ts
+app.use('/docs', (req, res, next) => (isAllowedToSeeDocs(req) ? next() : res.status(404).end()));
+DocfyUiModule.setup('/docs', app, { openApiDocument: document, proxyAuthorize: isAllowedToUseProxy });
+```
+
+On Fastify, do the same with an `onRequest` hook on `app.getHttpAdapter().getInstance()`. To restrict the "Try it out" proxy, use `proxyAuthorize` (see [`DocfyUiModule.setup()`](#docfyuimodulesetupmountpath-app-options)).
+
+**You'll hear about a risky setup before it ships.** Outside production, each misconfiguration shows up as a boot warning in your logs and as a banner inside docfy-ui. The banner is never sent in production. Proxy rejections carry an `X-Docfy-Proxy-Error` header (`proxy_unauthorized`, `unsupported_media_type`, `origin_not_allowed`, `payload_too_large`).
+
+**Reporting a vulnerability:** use GitHub's private [Report a vulnerability](https://github.com/MarvinRF/nest-docfy/security/advisories/new) form. See [SECURITY.md](./SECURITY.md).
+
+## Migrating to 0.19
+
+Go through each item that applies to you:
+
+1. **Node.js 22.12+.** Node 18 and 20 are end-of-life.
+2. **You use the CLI or the compiler plugin** (`nest-cli.json` → `plugins: ["nestjs-docfy"]`): `npm install --save-dev ts-morph commander picocolors`, plus `openapi-typescript` if you run `generate-client`. Without them the CLI and the build stop with the install command.
+3. **You use "Try it out" in production** (`openApiDocument` or `additionalProxyOrigins`): add `proxyAuthorize`. Until you do, the proxy is disabled when `NODE_ENV=production`, a boot error says so, and "Try it out" falls back to calling your API directly from the browser (subject to its CORS policy).
+
+   ```ts
+   DocfyUiModule.setup('/docs', app, {
+     openApiDocument: document,
+     // Runs for every proxy request; docfy-ui calls the proxy same-origin, so session cookies are sent.
+     proxyAuthorize: async (req) => (await currentUser(req))?.roles.includes('developer') ?? false,
+   });
+   ```
+
+   Only if the mount path is already protected by something else (middleware, private network), use `allowProxyInProduction: true` instead.
+
+4. **You call the proxy from your own client** (not docfy-ui): send `Content-Type: application/json`. Anything else gets `415`.
+5. **"Try it out" calls other origins directly** (no proxy) or your docs load remote resources: the new CSP only allows connections to origins it knows (`specs` URLs, `servers[]`, `additionalProxyOrigins`). Add the rest with `cspConnectSrc`, or replace the policy with `contentSecurityPolicy`. Symptom: a CSP violation in the browser console.
+6. **`nestjs-docfy test` / `docfy-mcp contract_test`:** write endpoints are skipped unless you pass `--allow-writes` (`allowWrites: true`), and a non-localhost `--base-url` must be one of the spec's `servers` (or pass `--no-restrict-to-servers`).
+7. **Reusable PR-check workflow:** add `docfy-version` and `docfy-ref` (see [GitHub Actions: PR check](#github-actions-pr-check)).
+8. **Custom `--pattern` / `controllerGlob`:** the basename is now matched exactly (`.` is literal, anchored at both ends). `*.ctrl.ts` no longer matches `users.ctrl.tsx`.
+
+docfy-ui 0.12+ (installed automatically) reads the page config from a JSON data block instead of inline scripts; that's what lets the strict CSP work.
 
 ## Quick start
 
@@ -385,6 +455,7 @@ npx nestjs-docfy doctor [options]
 - Controllers with no companion docs file, or with undocumented methods (same as `check`)
 - `docfy-ui` declared directly in your own `package.json` (has no effect — see [File naming convention](#file-naming-convention))
 - Docs files stamped by an older `nestjs-docfy` version than the one installed
+- **Security:** `DocfyUiModule.setup()` calls with a "Try it out" proxy but no `proxyAuthorize` (disabled in production), `allowProxyInProduction` without `proxyAuthorize`, `securityHeaders: false`, and a Node.js version below 22.12. Reported as `[security]` lines and in `securityFindings` with `--json`
 
 **Example output:**
 
@@ -647,18 +718,23 @@ npx nestjs-docfy mock --spec ./openapi.json --port 4010
 
 Fires a real request at every endpoint in an OpenAPI document (path/query params and the request body filled in with the same generated examples `mock` uses) and validates the live response against its declared schema — a Postman-collection-runner-equivalent driven straight off the spec, zero setup.
 
+**Safe by default:** only `GET`/`HEAD`/`OPTIONS` are fired (write endpoints are reported as skipped), and a `--base-url` that isn't localhost must be one of the spec's `servers`. Pass `--allow-writes` only against a disposable environment: generated bodies and placeholder IDs can create, change or delete real data.
+
 ```bash
 npx nestjs-docfy test --spec <path-or-url> --base-url <url> [options]
 ```
 
-| Option                  | Default      | Description                                                            |
-| ----------------------- | ------------ | ---------------------------------------------------------------------- |
-| `--spec <path\|url>`    | _(required)_ | A local `openapi.json`, or a URL (e.g. a running app's `/api-json`)    |
-| `--base-url <url>`      | _(required)_ | Base URL of the running server to test against                         |
-| `--header <name:value>` | —            | Extra header sent with every request (e.g. auth), repeatable           |
-| `--root <path>`         | `.`          | Project root directory                                                 |
-| `--json`                | `false`      | Output a single machine-readable JSON object instead of formatted text |
-| `--quiet`               | `false`      | Suppress all output except errors                                      |
+| Option                     | Default      | Description                                                                                       |
+| -------------------------- | ------------ | ------------------------------------------------------------------------------------------------- |
+| `--spec <path\|url>`       | _(required)_ | A local `openapi.json`, or a URL (e.g. a running app's `/api-json`)                               |
+| `--base-url <url>`         | _(required)_ | Base URL of the running server to test against                                                    |
+| `--header <name:value>`    | —            | Extra header sent with every request (e.g. auth), repeatable                                      |
+| `--allow-writes`           | `false`      | Also fire POST/PUT/PATCH/DELETE. **Can change real data** — only against a disposable environment |
+| `--restrict-to-servers`    | —            | Require `--base-url` to be in the spec's `servers` even for localhost                             |
+| `--no-restrict-to-servers` | —            | Accept any `--base-url`                                                                           |
+| `--root <path>`            | `.`          | Project root directory                                                                            |
+| `--json`                   | `false`      | Output a single machine-readable JSON object instead of formatted text                            |
+| `--quiet`                  | `false`      | Suppress all output except errors                                                                 |
 
 ```bash
 npx nestjs-docfy test --spec ./openapi.json --base-url http://localhost:3000 --header "Authorization:Bearer xyz"
@@ -718,25 +794,25 @@ on:
 
 jobs:
   docfy:
-    uses: MarvinRF/nest-docfy/.github/workflows/docfy-pr-check-reusable.yml@v0.18.2
+    uses: MarvinRF/nest-docfy/.github/workflows/docfy-pr-check-reusable.yml@v0.19.0
     with:
       root: . # project root, relative to your repo root (default: ".")
       export-entry: docfy-export.ts # optional — omit to skip the spec diff
       min-coverage: 80
-      docfy-version: 0.18.2 # pin the CLI run via npx
-      docfy-ref: v0.18.2 # pin the comment/diff scripts checked out from this repo
+      docfy-version: 0.19.0 # pin the CLI run via npx
+      docfy-ref: v0.19.0 # pin the comment/diff scripts checked out from this repo
 ```
 
 Pin all three to the same release, as above. The job runs with `pull-requests: write` on your repo, so referencing `@main` / `latest` means whatever lands on this repo's `main` or npm next runs in your CI unreviewed. For the strongest guarantee, pin `uses:` to a full commit SHA and let Dependabot (`package-ecosystem: github-actions`) propose upgrades.
 
-| Input           | Default  | Description                                                |
-| --------------- | -------- | ---------------------------------------------------------- |
-| `root`          | `.`      | Project root, relative to the repo root                    |
-| `export-entry`  | _(none)_ | Path to an export entry file; enables the spec-diff step   |
-| `min-coverage`  | `80`     | Minimum coverage percentage, fails the job if below        |
-| `node-version`  | `22.x`   | Node.js version to run the checks with                     |
-| `docfy-version` | `latest` | `nestjs-docfy` npm dist-tag/version to run                 |
-| `docfy-ref`     | `main`   | `nest-docfy` git ref to pull the comment/diff scripts from |
+| Input           | Default      | Description                                                                 |
+| --------------- | ------------ | --------------------------------------------------------------------------- |
+| `root`          | `.`          | Project root, relative to the repo root                                     |
+| `export-entry`  | _(none)_     | Path to an export entry file; enables the spec-diff step                    |
+| `min-coverage`  | `80`         | Minimum coverage percentage, fails the job if below                         |
+| `node-version`  | `22.x`       | Node.js version to run the checks with                                      |
+| `docfy-version` | _(required)_ | Exact `nestjs-docfy` version to run, e.g. `0.19.0`                          |
+| `docfy-ref`     | _(required)_ | `nest-docfy` tag or commit SHA for the comment/diff scripts, e.g. `v0.19.0` |
 
 The job fails if `check` finds drift or `coverage` is below `min-coverage`; the spec diff is informational only (breaking changes are sometimes intentional) and never fails the job on its own.
 
@@ -818,7 +894,7 @@ If the metadata file isn't found (e.g. the plugin isn't registered in `nest-cli.
 
 ### `DocfyUiModule.setup(mountPath, app, options?)`
 
-Serves [`docfy-ui`](https://www.npmjs.com/package/docfy-ui) (the AI-first documentation UI companion to this package) at `mountPath`, the same role `SwaggerModule.setup()` + `swagger-ui-express` play for raw Swagger UI. Works on both Express (`@nestjs/platform-express`) and Fastify (`@nestjs/platform-fastify`) apps. On Fastify, static asset serving needs the optional peer dependency [`@fastify/static`](https://www.npmjs.com/package/@fastify/static) (`npm install @fastify/static`), the same package `@nestjs/swagger` itself relies on for Fastify Swagger UI support. Versions 8, 9 and 10 are supported; prefer `^10.1.11`, which fixes a route-guard bypass via path traversal (GHSA-83w8-p2f5-377r) — note that v10 loads ESM-only dependencies through Node's native `require(esm)`, so it needs Node 20.19+ or 22.12+.
+Serves [`docfy-ui`](https://www.npmjs.com/package/docfy-ui) (the AI-first documentation UI companion to this package) at `mountPath`, the same role `SwaggerModule.setup()` + `swagger-ui-express` play for raw Swagger UI. Works on both Express (`@nestjs/platform-express`) and Fastify (`@nestjs/platform-fastify`) apps. On Fastify, static asset serving needs the optional peer dependency [`@fastify/static`](https://www.npmjs.com/package/@fastify/static) (`npm install @fastify/static`), the same package `@nestjs/swagger` itself relies on for Fastify Swagger UI support. Versions 8, 9 and 10 are supported; prefer `^10.1.11`, which fixes a route-guard bypass via path traversal (GHSA-83w8-p2f5-377r).
 
 ```ts
 import { NestFactory } from '@nestjs/core';
@@ -845,6 +921,11 @@ Visit `/docs`: no further configuration needed, since `docfy-ui` fetches `/api-j
 | `additionalProxyOrigins` | `string[]`                                   | —       | Extra origins the proxy is allowed to forward requests to, beyond what `openApiDocument.servers` declares.                             |
 | `llmsTxt`                | `true \| { document, title?, description? }` | —       | Serves `llms.txt`/`llms-full.txt` at `mountPath`. See below.                                                                           |
 | `guides`                 | `{ slug, title, content }[]`                 | —       | Narrative markdown pages at `{mountPath}/guides/:slug`, listed in the sidebar. See below.                                              |
+| `proxyAuthorize`         | `(req) => boolean \| Promise<boolean>`       | —       | Decides who may use the proxy (`false` → `403`). Nest guards don't run for the proxy route. Required for the proxy in production.      |
+| `allowProxyInProduction` | `boolean`                                    | `false` | Enables the proxy in production without `proxyAuthorize`. Only when the mount path is already protected by something else.             |
+| `securityHeaders`        | `boolean`                                    | `true`  | CSP, `nosniff`, `Referrer-Policy` and frame headers on the docs UI. `false` turns them all off (e.g. helmet already sets them).        |
+| `contentSecurityPolicy`  | `string`                                     | —       | Replaces the default `Content-Security-Policy` value.                                                                                  |
+| `cspConnectSrc`          | `string[]`                                   | —       | Extra `connect-src` origins for the default CSP (e.g. API servers "Try it out" calls directly when the spec has no `servers[]`).       |
 
 **`staticSpecPath`: needed if your app builds with `"webpack": true`, and you're not using the [CLI plugin](#webpack-true-build-mode).** `DocfyModule`'s runtime metadata pipeline cannot apply docs files there, so the live `/api-json` will be missing everything docs files would otherwise add. Generate a patched document ahead of time:
 
@@ -862,7 +943,7 @@ Call this **before** `SwaggerModule.setup()`: Express resolves routes in registr
 
 > **Fastify caveat**: `SwaggerModule.setup()` also registers its own `/api-json` route by default. On Express, whichever route is registered first silently wins. On Fastify, registering the same exact route twice throws `FST_ERR_DUPLICATED_ROUTE` at startup instead. Registration order does not save you. When using `staticSpecPath` together with Fastify, point `SwaggerModule.setup()` at a different `jsonDocumentUrl`, or pass `{ raw: false }`, so it doesn't also claim `/api-json`.
 >
-> `docfy-ui` reads the mount prefix `DocfyUiModule.setup()` injects (`window.__DOCFY_BASE_PATH__`) and passes it as `BrowserRouter`'s `basename`, so deep client-side routes (e.g. reloading an endpoint's detail page directly) resolve correctly at any `mountPath`, not just `/`.
+> `docfy-ui` reads the mount prefix `DocfyUiModule.setup()` injects (in the page's `docfy-config` JSON block) and passes it as `BrowserRouter`'s `basename`, so deep client-side routes (e.g. reloading an endpoint's detail page directly) resolve correctly at any `mountPath`, not just `/`.
 
 **`openApiDocument` / `additionalProxyOrigins`: enables `docfy-ui`'s "Try it out" same-origin proxy.** Without it, "Try it out" does a direct `fetch()` from the browser to the target API, subject to that API's own CORS policy. With it, the browser instead calls a same-origin route this module registers (`POST {mountPath}/__docfy_proxy`), and the proxy makes the real request server-to-server — CORS never applies.
 
@@ -873,6 +954,15 @@ DocfyUiModule.setup('/docs', app, { openApiDocument: document });
 ```
 
 The proxy's allowlist is built **only** from absolute URLs in the OpenAPI document's `servers[]` array (plus anything in `additionalProxyOrigins`) — a request for any other origin gets rejected with `403` and an `X-Docfy-Proxy-Error: origin_not_allowed` response header. There is deliberately no implicit "same origin as this request" fallback: that would have to be derived from client-controlled request headers (`Host`), which is a classic SSRF vector — someone hitting the proxy endpoint directly (not through a browser, no CORS involved) could forge it to reach an internal-only origin. Declare `servers[]` in your `DocumentBuilder` config to opt an origin in; without any absolute `servers[]` entry, the route exists but always returns `403`.
+
+**In production the proxy needs `proxyAuthorize`.** The proxy route sits on the raw HTTP adapter, so Nest guards never run for it: without a check, anyone who can reach the mount path could send requests to your servers through your app. With `NODE_ENV=production` and no `proxyAuthorize`, the route isn't registered at all and a boot error explains why (`allowProxyInProduction: true` overrides this when something else already protects the mount path). Outside production it works without the hook, and docfy-ui shows a banner reminding you to add one. The proxy only accepts `Content-Type: application/json` (`415` otherwise), which stops a cross-site `<form>` from using a logged-in visitor's cookies to reach it.
+
+```ts
+DocfyUiModule.setup('/docs', app, {
+  openApiDocument: document,
+  proxyAuthorize: async (req) => (await currentUser(req))?.roles.includes('developer') ?? false,
+});
+```
 
 Every other proxy failure (target unreachable, timeout) also sets `X-Docfy-Proxy-Error`, so `docfy-ui` can tell a proxy-level failure apart from a real `4xx`/`5xx` response coming from your API — those pass through untouched, with their real status/headers/body.
 

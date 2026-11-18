@@ -26,7 +26,16 @@ NestJS controllers decorated with `@nestjs/swagger` decorators (`@ApiOperation`,
 npm install nestjs-docfy
 ```
 
-Peer dependencies: `@nestjs/common >=9`, `@nestjs/swagger >=6`, `reflect-metadata`.
+Peer dependencies: `@nestjs/common >=9`, `@nestjs/swagger >=6`, `reflect-metadata`. Requires Node.js 22.12+.
+
+CLI and compiler plugin (build time only, since 0.19 optional peers): `npm install --save-dev ts-morph commander picocolors` (plus `openapi-typescript` for `generate-client`). Without them the CLI/plugin print this install command.
+
+## Security defaults (0.19+)
+
+- `DocfyUiModule.setup()`: the "Try it out" proxy is disabled when `NODE_ENV=production` unless `proxyAuthorize: (req) => boolean | Promise<boolean>` is set (or `allowProxyInProduction: true`). Nest guards never run for the docs/proxy routes; protect the mount path with middleware.
+- The proxy only accepts `Content-Type: application/json`, never relays `Host` or `Set-Cookie`, and only targets the spec's `servers[]` plus `additionalProxyOrigins`.
+- The docs UI is served with a strict CSP (`script-src 'self'`) plus `nosniff`, `Referrer-Policy: no-referrer` and same-origin framing. Options: `securityHeaders: false`, `contentSecurityPolicy`, `cspConnectSrc`.
+- `nestjs-docfy test` fires only GET/HEAD/OPTIONS unless `--allow-writes`; a non-localhost `--base-url` must be in the spec's `servers` unless `--no-restrict-to-servers`.
 
 ## Core API
 

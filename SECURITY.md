@@ -23,11 +23,23 @@ You should get an initial response within a few days. This project is
 maintained by a single person, not a team — treat that as a realistic
 expectation, not an SLA.
 
+## Secure defaults
+
+Since 0.19 every surface this package exposes is locked down by default, and
+each way to loosen it is an explicitly named option. The full list is in the
+README's [Security](./README.md#security) section, with the upgrade steps in
+[Migrating to 0.19](./README.md#migrating-to-019).
+
 ## Scope
 
 **In scope**: vulnerabilities in this package's own code — the CLI
 (`generate`/`check`/`patch-spec`/`mock`/`test`/etc.), the NestJS runtime
 module (`DocfyModule`, `DocfyUiModule`), and the published npm artifact.
+
+**Also in scope**: a default that lets an attacker in without you having opted
+into something named as unsafe (`allowProxyInProduction`, `securityHeaders:
+false`, `--allow-writes`, ...). Defaults are meant to be safe; if one isn't,
+that's a vulnerability here, not a misconfiguration on your side.
 
 **Out of scope**: vulnerabilities in your own generated `*.docs.ts` files or
 application code, misconfiguration of `DocfyUiModule`'s proxy/CORS options
