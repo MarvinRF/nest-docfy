@@ -639,6 +639,13 @@ program
         );
       }
 
+      for (const finding of report.securityFindings) {
+        log(
+          'warn',
+          `${pc.yellow('[security]')} ${finding.location ? `${pc.cyan(finding.location)}: ` : ''}${finding.message}`,
+        );
+      }
+
       if (report.docfyUiPin) {
         log(
           'warn',
@@ -1210,7 +1217,12 @@ program
   .option('--filter <substring>', 'Case-insensitive substring match against path/tags, to test a subset')
   .option(
     '--restrict-to-servers',
-    "Reject the run before firing any request if --base-url doesn't match one of the spec's declared servers",
+    "Enforce that --base-url is one of the spec's declared servers even for localhost (by default it is enforced for every non-loopback URL)",
+  )
+  .option('--no-restrict-to-servers', 'Accept any --base-url, even one outside the spec servers')
+  .option(
+    '--allow-writes',
+    'Also fire POST/PUT/PATCH/DELETE with generated bodies — can create, change or delete real data; use only against a disposable environment',
     false,
   )
   .option('--root <path>', 'Project root directory', '.')
@@ -1241,7 +1253,8 @@ program
         baseUrl: String(rawOpts.baseUrl),
         headers,
         filter: rawOpts.filter ? String(rawOpts.filter) : undefined,
-        restrictToServers: Boolean(rawOpts.restrictToServers),
+        restrictToServers: rawOpts.restrictToServers as boolean | undefined,
+        allowWrites: Boolean(rawOpts.allowWrites),
       });
 
       const mismatched = results.filter((r) => r.outcome.kind === 'matched' && r.outcome.mismatches.length > 0);
@@ -1258,6 +1271,7 @@ program
       const undeclaredStatus = results.filter((r) => r.outcome.kind === 'undeclared-status');
       const noSchema = results.filter((r) => r.outcome.kind === 'no-schema');
       const unparseable = results.filter((r) => r.outcome.kind === 'unparseable-body');
+      const skippedWrites = results.filter((r) => r.outcome.kind === 'skipped-unsafe-method');
 
       if (cleanMatches.length > 0) log('success', `${cleanMatches.length} endpoint(s) matched their schema cleanly.`);
       if (noSchema.length > 0)
@@ -1270,6 +1284,11 @@ program
       }
       if (unparseable.length > 0)
         log('warn', `${unparseable.length} endpoint(s) returned a non-JSON body for a status with a declared schema.`);
+      if (skippedWrites.length > 0)
+        log(
+          'info',
+          `${skippedWrites.length} write endpoint(s) skipped (POST/PUT/PATCH/DELETE). Pass --allow-writes to fire them — only against a disposable environment.`,
+        );
 
       for (const result of requestFailed) {
         if (result.outcome.kind !== 'request-failed') continue;

@@ -4,6 +4,7 @@ import { checkControllers, type CheckIssue } from './check';
 import { checkDocfyUiPin, type DocfyUiPinInfo } from './docfy-ui-pin-check';
 import { checkDocsVersionDrift, type DocsVersionDrift } from './docs-version-check';
 import type { ProjectContext } from './project-types';
+import { checkSecurity, type SecurityFinding } from './security-check';
 
 export interface DoctorReport {
   project: ProjectContext;
@@ -14,6 +15,7 @@ export interface DoctorReport {
   versionDrift: DocsVersionDrift[];
   webpackMissingPlugin: string[];
   inertSwcPlugin: string[];
+  securityFindings: SecurityFinding[];
 }
 
 export interface RunDoctorOptions {
@@ -48,6 +50,7 @@ export function runDoctor(root: string, options: RunDoctorOptions): DoctorReport
     versionDrift: checkDocsVersionDrift(scanResult.controllers, options.format, options.currentVersion),
     webpackMissingPlugin: projectsWithWebpackWithoutPlugin(project.root),
     inertSwcPlugin: projectsWithInertSwcPlugin(project.root),
+    securityFindings: checkSecurity(project.root),
   };
 }
 
@@ -59,6 +62,7 @@ export function isDoctorReportClean(report: DoctorReport): boolean {
     report.docfyUiPin === null &&
     report.versionDrift.length === 0 &&
     report.webpackMissingPlugin.length === 0 &&
-    report.inertSwcPlugin.length === 0
+    report.inertSwcPlugin.length === 0 &&
+    report.securityFindings.length === 0
   );
 }

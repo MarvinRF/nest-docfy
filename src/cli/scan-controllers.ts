@@ -129,9 +129,8 @@ export function scanApp(
       return baseName.endsWith('.controller.ts') && !baseName.endsWith('.docs.ts');
     }
 
-    // For custom globs, apply simple basename pattern match
-    const pattern = path.basename(glob).replace(/\*/g, '.*');
-    return new RegExp(pattern).test(baseName);
+    // For custom globs, match the basename against the glob's last segment
+    return basenameGlobToRegExp(path.basename(glob)).test(baseName);
   });
 
   for (const sf of sourceFiles) {
@@ -215,4 +214,36 @@ export function scanAllApps(
   }
 
   return { controllers: allControllers, errors: allErrors, projectsByControllerPath };
+}
+
+/**
+ * Converts a basename glob (`*`, `?`, `{a,b}`) to an anchored RegExp. Every other character is
+ * matched literally. The previous conversion only turned `*` into `.*`, which left `.` as "any character" and the
+ * match unanchored, so `*.ctrl.ts` also matched `users.ctrl.tsx` or `xctrlyts`.
+ */
+export function basenameGlobToRegExp(glob: string): RegExp {
+  let source = '';
+  for (let i = 0; i < glob.length; i++) {
+    const char = glob[i];
+    if (char === '*') source += '[^/]*';
+    else if (char === '?') source += '[^/]';
+    else if (char === '{') {
+      const end = glob.indexOf('}', i);
+      if (end === -1) {
+        source += '\\{';
+        continue;
+      }
+      source += `(?:${glob
+        .slice(i + 1, end)
+        .split(',')
+        .map(escapeRegExp)
+        .join('|')})`;
+      i = end;
+    } else source += escapeRegExp(char);
+  }
+  return new RegExp(`^${source}$`);
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
