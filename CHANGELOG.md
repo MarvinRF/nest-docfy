@@ -1,3 +1,40 @@
+# [0.19.0](https://github.com/MarvinRF/nest-docfy/compare/v0.18.2...v0.19.0) (2026-11-18)
+
+
+* feat(deps)!: make build tooling and express optional peers ([f9c4c5f](https://github.com/MarvinRF/nest-docfy/commit/f9c4c5fc74dc946d7bab9c14e7091a5e2c0e4c08))
+* feat(ui)!: lock down the docs UI and the Try it out proxy by default ([c6fc2cf](https://github.com/MarvinRF/nest-docfy/commit/c6fc2cfb8b892655b54fb88eb031b58e20a31861))
+
+
+### Bug Fixes
+
+* **deps:** require docfy-core ^0.7.0 and docfy-ui ^0.12.0 ([86d70b5](https://github.com/MarvinRF/nest-docfy/commit/86d70b556e16a57a2639cb7eecc10b036e83305a))
+* **proxy:** stop relaying Set-Cookie from the target ([bb1e556](https://github.com/MarvinRF/nest-docfy/commit/bb1e5567a7f7a06b346162a4e2d7a8b5932a448d))
+* **ui:** escape every value injected into the served index.html ([2262e75](https://github.com/MarvinRF/nest-docfy/commit/2262e75f4008b479475af6e2fe5bfa89d5c863be))
+
+
+### Documentation
+
+* security section and 0.19 migration guide; pin the reusable workflow ([019f061](https://github.com/MarvinRF/nest-docfy/commit/019f06119eef27e31e09ad817c7bc8b05b6e3c08))
+
+
+### BREAKING CHANGES
+
+* callers of docfy-pr-check-reusable.yml must pass
+docfy-version and docfy-ref.
+
+633 tests passing.
+* the CLI and the compiler plugin need
+npm install --save-dev ts-morph commander picocolors (plus
+openapi-typescript for generate-client). Node.js 22.12+ is required.
+* with NODE_ENV=production the Try it out proxy is
+disabled unless proxyAuthorize or allowProxyInProduction is set. The
+proxy rejects any Content-Type other than application/json. The served
+page no longer defines window.__DOCFY_*__ globals (requires docfy-ui
+0.12+). The docs UI now sends a strict Content-Security-Policy; origins
+the browser must reach directly go in cspConnectSrc.
+
+ADR: docs/nest-docfy/adr-0001-secure-by-default.md (container docs).
+
 ## [0.18.2](https://github.com/MarvinRF/nest-docfy/compare/v0.18.1...v0.18.2) (2026-11-18)
 
 
