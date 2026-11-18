@@ -238,6 +238,59 @@ describe('DocfyUiModule.setup() — Express', () => {
     expect(res.headers['x-docfy-proxy-error']).toBe('origin_not_allowed');
   });
 
+  describe('injected HTML hardening', () => {
+    function getBodyAt(mountPath: string, calls: ReturnType<typeof makeRecordingApp>['calls']): string {
+      const fallback = calls.filter((c) => c.args[0] === mountPath).at(-1)!;
+      const handler = fallback.args[1] as (req: unknown, res: ReturnType<typeof makeMockResponse>) => void;
+      const res = makeMockResponse();
+      handler(undefined, res);
+      return res.body ?? '';
+    }
+
+    it('escapes a </script> in a spec name so it cannot break out of the injected <script> tag', () => {
+      const { app, calls } = makeRecordingApp();
+      DocfyUiModule.setup('/docs', app, { specs: [{ name: '</script><script>alert(1)</script>', url: '/a' }] });
+
+      const body = getBodyAt('/docs', calls);
+      expect(body).not.toContain('</script><script>alert');
+      expect(body).toContain('\\u003c/script>\\u003cscript>alert(1)');
+    });
+
+    it('escapes the mount path inside the <base href> attribute', () => {
+      const { app, calls } = makeRecordingApp();
+      const mountPath = '/docs"><script>alert(1)</script>';
+      DocfyUiModule.setup(mountPath, app);
+
+      const body = getBodyAt(mountPath, calls);
+      expect(body).not.toContain('"><script>alert');
+      expect(body).toContain('<base href="/docs&quot;&gt;&lt;script&gt;alert(1)&lt;/script&gt;/" />');
+    });
+  });
+
+  describe('production proxy warning', () => {
+    const originalEnv = process.env.NODE_ENV;
+    let warn: jest.SpyInstance;
+    beforeEach(() => {
+      warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
+    });
+    afterEach(() => {
+      process.env.NODE_ENV = originalEnv;
+      warn.mockRestore();
+    });
+
+    it('warns when the proxy is enabled with NODE_ENV=production', () => {
+      process.env.NODE_ENV = 'production';
+      DocfyUiModule.setup('/docs', makeRecordingApp().app, { additionalProxyOrigins: ['https://api.example.com'] });
+      expect(warn).toHaveBeenCalledWith(expect.stringContaining('"Try it out" proxy is enabled in production'));
+    });
+
+    it('does not warn outside production', () => {
+      process.env.NODE_ENV = 'development';
+      DocfyUiModule.setup('/docs', makeRecordingApp().app, { additionalProxyOrigins: ['https://api.example.com'] });
+      expect(warn).not.toHaveBeenCalled();
+    });
+  });
+
   describe('guides option', () => {
     function getFallbackBody(
       app: ReturnType<typeof makeRecordingApp>['app'],

@@ -109,6 +109,23 @@ export interface DocfyUiSetupOptions {
   guides?: { slug: string; title: string; content: string }[];
 }
 
+/**
+ * Serializes a value for an inline `<script>` block. Any injected string (a spec name or URL
+ * from config, guide prose containing a literal `</script>`, a mount path) could otherwise
+ * close the block early and inject raw HTML. `<` is inert inside a JS string but can't be
+ * parsed as a tag by the HTML parser; U+2028/U+2029 are escaped for pre-ES2019 engines.
+ */
+function toInlineScriptJson(value: unknown): string {
+  return JSON.stringify(value)
+    .replace(/</g, '\\u003c')
+    .replace(/\u2028/g, '\\u2028')
+    .replace(/\u2029/g, '\\u2029');
+}
+
+function escapeHtmlAttribute(value: string): string {
+  return value.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+}
+
 function loadFastifyStatic(): unknown {
   try {
     // eslint-disable-next-line @typescript-eslint/no-require-imports
@@ -224,6 +241,14 @@ export class DocfyUiModule {
             '(or pass `additionalProxyOrigins`) to allow it.',
         );
       }
+      if (process.env.NODE_ENV === 'production') {
+        console.warn(
+          `DocfyUiModule.setup(): the "Try it out" proxy is enabled in production. Its route is not ` +
+            `covered by Nest guards — anyone who can reach ${mountPath} can relay requests to the ` +
+            'allowed servers through this app. Protect the mount path with middleware, or omit ' +
+            '`openApiDocument`/`additionalProxyOrigins` here.',
+        );
+      }
       proxyPath = `${basePath}__docfy_proxy`.replace(/\/+/g, '/');
       httpAdapter.post(proxyPath, (req: any, res: any) => {
         readJsonBody(req)
@@ -237,24 +262,19 @@ export class DocfyUiModule {
     const indexHtmlPath = require.resolve('docfy-ui/dist/index.html');
     const uiDir = path.dirname(indexHtmlPath);
     const specsScript = options.specs
-      ? `\n    <script>window.__DOCFY_SPECS__ = ${JSON.stringify(options.specs)};</script>`
+      ? `\n    <script>window.__DOCFY_SPECS__ = ${toInlineScriptJson(options.specs)};</script>`
       : '';
     const proxyScript = proxyPath
-      ? `\n    <script>window.__DOCFY_PROXY_PATH__ = ${JSON.stringify(proxyPath)};</script>`
+      ? `\n    <script>window.__DOCFY_PROXY_PATH__ = ${toInlineScriptJson(proxyPath)};</script>`
       : '';
-    // Guide content is freeform prose (unlike the URLs/paths above) — plausibly containing a
-    // literal `</script>` (e.g. a tutorial showing an inline script tag as an example), which
-    // would otherwise prematurely close this script block and inject raw HTML into the page.
-    // Escaping `<` to its unicode escape is inert inside a JS string but can't be parsed as a
-    // tag by the HTML parser.
     const guidesScript = options.guides
-      ? `\n    <script>window.__DOCFY_GUIDES__ = ${JSON.stringify(options.guides).replace(/</g, '\\u003c')};</script>`
+      ? `\n    <script>window.__DOCFY_GUIDES__ = ${toInlineScriptJson(options.guides)};</script>`
       : '';
     const indexHtml = fs
       .readFileSync(indexHtmlPath, 'utf8')
       .replace(
         '<head>',
-        `<head>\n    <base href="${basePath}" />\n    <script>window.__DOCFY_BASE_PATH__ = ${JSON.stringify(basePath)};</script>${specsScript}${proxyScript}${guidesScript}`,
+        `<head>\n    <base href="${escapeHtmlAttribute(basePath)}" />\n    <script>window.__DOCFY_BASE_PATH__ = ${toInlineScriptJson(basePath)};</script>${specsScript}${proxyScript}${guidesScript}`,
       );
 
     if (isFastify) {
