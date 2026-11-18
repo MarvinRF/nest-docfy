@@ -1,7 +1,13 @@
 import * as http from 'http';
 import { EventEmitter } from 'events';
 import type { AddressInfo } from 'net';
-import { buildAllowedOrigins, handleProxyRequest, PROXY_ERROR_HEADER, readJsonBody } from '../proxy-handler';
+import {
+  BODY_TOO_LARGE,
+  buildAllowedOrigins,
+  handleProxyRequest,
+  PROXY_ERROR_HEADER,
+  readJsonBody,
+} from '../proxy-handler';
 
 function makeMockResponse() {
   const res = {
@@ -62,9 +68,25 @@ describe('readJsonBody()', () => {
     req.emit('end');
     await expect(promise).resolves.toBeUndefined();
   });
+
+  it('resolves to BODY_TOO_LARGE once the raw body exceeds the size limit', async () => {
+    const req = new EventEmitter();
+    const promise = readJsonBody(req);
+    req.emit('data', Buffer.alloc(6 * 1024 * 1024));
+    req.emit('data', Buffer.alloc(6 * 1024 * 1024));
+    req.emit('end');
+    await expect(promise).resolves.toBe(BODY_TOO_LARGE);
+  });
 });
 
 describe('handleProxyRequest()', () => {
+  it('rejects an oversized body with 413 payload_too_large', async () => {
+    const res = makeMockResponse();
+    await handleProxyRequest(BODY_TOO_LARGE, new Set(), res);
+    expect(res.statusCode).toBe(413);
+    expect(res.headers[PROXY_ERROR_HEADER]).toBe('payload_too_large');
+  });
+
   it('rejects a missing/malformed body with 400 bad_request', async () => {
     const res = makeMockResponse();
     await handleProxyRequest(undefined, new Set(), res);
@@ -132,6 +154,10 @@ describe('handleProxyRequest()', () => {
           });
           return;
         }
+        if (req.url === '/host') {
+          res.end(req.headers.host ?? '');
+          return;
+        }
         if (req.url === '/error-status') {
           res.statusCode = 404;
           res.end('not found upstream');
@@ -161,6 +187,16 @@ describe('handleProxyRequest()', () => {
       expect(res.headers['x-echo-header']).toBe('hello');
       expect(JSON.parse(res.body!)).toEqual({ received: '{"a":1}', method: 'POST' });
       expect(res.headers[PROXY_ERROR_HEADER]).toBeUndefined();
+    });
+
+    it('derives Host from the target URL, ignoring a client-supplied Host header', async () => {
+      const res = makeMockResponse();
+      await handleProxyRequest(
+        { method: 'GET', url: `${origin}/host`, headers: { Host: 'internal-admin.local' } },
+        new Set([origin]),
+        res,
+      );
+      expect(res.body).toBe(new URL(origin).host);
     });
 
     it('passes through a real error status from the target without treating it as a proxy error', async () => {

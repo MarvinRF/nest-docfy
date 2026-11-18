@@ -22,9 +22,15 @@ const HOP_BY_HOP_HEADERS = new Set([
   'proxy-authenticate',
   'te',
   'trailer',
+  // Always derived from the target URL by `http.request` — a client-supplied value would let the
+  // caller address a different virtual host on an allowlisted IP, bypassing the origin check.
+  'host',
 ]);
 
 export const PROXY_ERROR_HEADER = 'x-docfy-proxy-error';
+
+/** Resolved by `readJsonBody` when the raw envelope exceeds `MAX_BODY_BYTES`. */
+export const BODY_TOO_LARGE = Symbol('docfy-proxy-body-too-large');
 
 interface RawRequestLike {
   body?: unknown;
@@ -43,11 +49,25 @@ export function readJsonBody(req: RawRequestLike): Promise<unknown> {
   if (req.body !== undefined) return Promise.resolve(req.body);
 
   return new Promise((resolve) => {
-    let raw = '';
+    // Unauthenticated route: cap the buffered envelope so a large upload can't exhaust memory.
+    const chunks: Buffer[] = [];
+    let receivedBytes = 0;
+    let tooLarge = false;
     req.on('data', (chunk) => {
-      raw += chunk;
+      if (tooLarge) return;
+      const buf = Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
+      receivedBytes += buf.length;
+      if (receivedBytes > MAX_BODY_BYTES) {
+        tooLarge = true;
+        chunks.length = 0;
+        resolve(BODY_TOO_LARGE);
+        return;
+      }
+      chunks.push(buf);
     });
     req.on('end', () => {
+      if (tooLarge) return;
+      const raw = Buffer.concat(chunks).toString('utf8');
       try {
         resolve(raw ? JSON.parse(raw) : undefined);
       } catch {
@@ -171,6 +191,10 @@ export async function handleProxyRequest(
   allowedOrigins: Set<string>,
   res: ProxyResponderLike,
 ): Promise<void> {
+  if (requestBody === BODY_TOO_LARGE) {
+    sendProxyError(res, 413, 'payload_too_large', 'Request body exceeded the proxy size limit.');
+    return;
+  }
   if (!requestBody || typeof requestBody !== 'object') {
     sendProxyError(res, 400, 'bad_request', 'Missing or malformed JSON body.');
     return;
