@@ -1,8 +1,10 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import * as express from 'express';
+import type * as express from 'express';
+import { requireOptionalPeer } from './optional-peer';
 import { buildLlmsFullTxt, buildLlmsTxt, normalizeDocument } from 'docfy-core';
-import { buildAllowedOrigins, handleProxyRequest, ProxyResponderLike, readJsonBody } from './proxy-handler';
+import { buildAllowedOrigins, handleProxyRoute, ProxyResponderLike } from './proxy-handler';
+import { buildSecurityHeaders, collectConnectSrc } from './security-headers';
 
 /**
  * Minimal structural shape of what `DocfyUiModule.setup()` needs from a
@@ -107,10 +109,45 @@ export interface DocfyUiSetupOptions {
    * where guide files live in your project. Omit entirely to leave the sidebar unchanged.
    */
   guides?: { slug: string; title: string; content: string }[];
+
+  /**
+   * Decides whether a "Try it out" proxy request may go through; return `false` to reject it with
+   * 403. The proxy route sits on the raw HTTP adapter, so **Nest guards never run for it** — this
+   * hook is where you check the caller (session, API key, IP...). Errors thrown here reject the
+   * request (fail closed). When `NODE_ENV=production`, the proxy is only enabled if this hook (or
+   * `allowProxyInProduction`) is set.
+   */
+  proxyAuthorize?: (req: unknown) => boolean | Promise<boolean>;
+
+  /**
+   * Enables the proxy in production without `proxyAuthorize`. Only for when the mount path is
+   * already protected by something else (middleware in front of it, a private network). Anyone who
+   * can reach the mount path can otherwise relay requests to every allowed server.
+   */
+  allowProxyInProduction?: boolean;
+
+  /**
+   * Security headers on the docs UI responses: a `Content-Security-Policy` that only allows this
+   * origin's scripts, `X-Content-Type-Options: nosniff`, `Referrer-Policy: no-referrer` and
+   * framing limited to the same origin. On by default; `false` turns them all off (e.g. when a
+   * reverse proxy or helmet already sets them).
+   */
+  securityHeaders?: boolean;
+
+  /** Replaces the default `Content-Security-Policy` value entirely. */
+  contentSecurityPolicy?: string;
+
+  /**
+   * Extra `connect-src` sources for the default CSP. Origins this module already knows (absolute
+   * `specs` URLs, `openApiDocument`/static spec `servers`, `additionalProxyOrigins`) are included
+   * automatically; list here any other origin the browser must reach, e.g. API servers called
+   * directly by "Try it out" when the spec comes from a live `SwaggerModule` document.
+   */
+  cspConnectSrc?: string[];
 }
 
 /**
- * Serializes a value for an inline `<script>` block. Any injected string (a spec name or URL
+ * Serializes a value for a `<script>` data block. Any injected string (a spec name or URL
  * from config, guide prose containing a literal `</script>`, a mount path) could otherwise
  * close the block early and inject raw HTML. `<` is inert inside a JS string but can't be
  * parsed as a tag by the HTML parser; U+2028/U+2029 are escaped for pre-ES2019 engines.
@@ -120,6 +157,12 @@ function toInlineScriptJson(value: unknown): string {
     .replace(/</g, '\\u003c')
     .replace(/\u2028/g, '\\u2028')
     .replace(/\u2029/g, '\\u2029');
+}
+
+function readServerUrls(document: unknown): string[] {
+  const servers = (document as { servers?: unknown } | undefined)?.servers;
+  if (!Array.isArray(servers)) return [];
+  return servers.map((s) => (s as { url?: unknown })?.url).filter((u): u is string => typeof u === 'string');
 }
 
 function escapeHtmlAttribute(value: string): string {
@@ -140,10 +183,12 @@ function loadFastifyStatic(): unknown {
 
 interface FastifyReplyLike {
   type(contentType: string): { send(body: string): unknown };
+  header(name: string, value: string): unknown;
 }
 
 interface FastifyScopedInstance {
   register(plugin: unknown, opts?: Record<string, unknown>): unknown;
+  addHook(name: 'onRequest', hook: (req: unknown, reply: FastifyReplyLike, done: () => void) => void): unknown;
   setNotFoundHandler(handler: (req: unknown, reply: FastifyReplyLike) => unknown): unknown;
 }
 
@@ -165,8 +210,10 @@ interface FastifyRootInstance {
  * directly) resolve correctly at any `mountPath`: this injects a `<base>`
  * tag matching `mountPath` (so the build's relative asset URLs resolve
  * against it instead of the current, possibly-deep, pathname) and a
- * `window.__DOCFY_BASE_PATH__` global that `docfy-ui` reads to set
- * `BrowserRouter`'s `basename`.
+ * `<script type="application/json" id="docfy-config">` data block that
+ * `docfy-ui` reads (base path, specs, proxy path, guides, security notices).
+ * A data block is never executed, so the page works under the strict CSP
+ * this module sends.
  */
 export class DocfyUiModule {
   static setup(mountPath: string, app: DocfyUiSetupTarget, options: DocfyUiSetupOptions = {}): void {
@@ -231,8 +278,35 @@ export class DocfyUiModule {
       });
     }
 
+    const isProduction = process.env.NODE_ENV === 'production';
+    const securityNotices: string[] = [];
+    const proxyRequested = Boolean(options.openApiDocument || options.additionalProxyOrigins);
+    const proxyBlockedInProduction =
+      proxyRequested && isProduction && !options.proxyAuthorize && !options.allowProxyInProduction;
+
+    if (proxyBlockedInProduction) {
+      console.error(
+        'DocfyUiModule.setup(): the "Try it out" proxy is DISABLED because NODE_ENV=production and ' +
+          'no `proxyAuthorize` hook was given. Its route bypasses Nest guards, so without it anyone ' +
+          `who can reach ${mountPath} could relay requests to your servers. Add \`proxyAuthorize\` ` +
+          '(or `allowProxyInProduction: true` if the mount path is already protected). ' +
+          'See https://github.com/MarvinRF/nest-docfy#security',
+      );
+    } else if (proxyRequested && !options.proxyAuthorize) {
+      securityNotices.push(
+        `The "Try it out" proxy has no proxyAuthorize hook: anyone who can reach ${mountPath} can send ` +
+          'requests through it. With NODE_ENV=production it is disabled unless you add proxyAuthorize ' +
+          '(or allowProxyInProduction).',
+      );
+    }
+    if (options.securityHeaders === false) {
+      securityNotices.push(
+        'Security headers are disabled (securityHeaders: false), including the Content-Security-Policy.',
+      );
+    }
+
     let proxyPath: string | undefined;
-    if (options.openApiDocument || options.additionalProxyOrigins) {
+    if (proxyRequested && !proxyBlockedInProduction) {
       const allowedOrigins = buildAllowedOrigins(options.openApiDocument?.servers, options.additionalProxyOrigins);
       if (allowedOrigins.size === 0) {
         console.warn(
@@ -241,47 +315,58 @@ export class DocfyUiModule {
             '(or pass `additionalProxyOrigins`) to allow it.',
         );
       }
-      if (process.env.NODE_ENV === 'production') {
-        console.warn(
-          `DocfyUiModule.setup(): the "Try it out" proxy is enabled in production. Its route is not ` +
-            `covered by Nest guards — anyone who can reach ${mountPath} can relay requests to the ` +
-            'allowed servers through this app. Protect the mount path with middleware, or omit ' +
-            '`openApiDocument`/`additionalProxyOrigins` here.',
-        );
-      }
       proxyPath = `${basePath}__docfy_proxy`.replace(/\/+/g, '/');
+      const authorize = options.proxyAuthorize;
       httpAdapter.post(proxyPath, (req: any, res: any) => {
-        readJsonBody(req)
-          .then((body) => handleProxyRequest(body, allowedOrigins, res as ProxyResponderLike))
-          .catch((err) => {
-            console.error('DocfyUiModule: "Try it out" proxy handler failed unexpectedly:', err);
-          });
+        return handleProxyRoute(req, res as ProxyResponderLike, allowedOrigins, authorize).catch((err) => {
+          console.error('DocfyUiModule: "Try it out" proxy handler failed unexpectedly:', err);
+        });
       });
     }
 
     const indexHtmlPath = require.resolve('docfy-ui/dist/index.html');
     const uiDir = path.dirname(indexHtmlPath);
-    const specsScript = options.specs
-      ? `\n    <script>window.__DOCFY_SPECS__ = ${toInlineScriptJson(options.specs)};</script>`
-      : '';
-    const proxyScript = proxyPath
-      ? `\n    <script>window.__DOCFY_PROXY_PATH__ = ${toInlineScriptJson(proxyPath)};</script>`
-      : '';
-    const guidesScript = options.guides
-      ? `\n    <script>window.__DOCFY_GUIDES__ = ${toInlineScriptJson(options.guides)};</script>`
-      : '';
+    // Notices are developer-facing: never sent in production, so end users of a deployed docs
+    // site don't see the app's configuration details.
+    const hostConfig = {
+      basePath,
+      specs: options.specs,
+      proxyPath,
+      guides: options.guides,
+      securityNotices: !isProduction && securityNotices.length > 0 ? securityNotices : undefined,
+    };
     const indexHtml = fs
       .readFileSync(indexHtmlPath, 'utf8')
       .replace(
         '<head>',
-        `<head>\n    <base href="${escapeHtmlAttribute(basePath)}" />\n    <script>window.__DOCFY_BASE_PATH__ = ${toInlineScriptJson(basePath)};</script>${specsScript}${proxyScript}${guidesScript}`,
+        `<head>\n    <base href="${escapeHtmlAttribute(basePath)}" />\n    <script type="application/json" id="docfy-config">${toInlineScriptJson(hostConfig)}</script>`,
       );
+
+    const securityHeaders =
+      options.securityHeaders === false
+        ? []
+        : buildSecurityHeaders({
+            contentSecurityPolicy: options.contentSecurityPolicy,
+            connectSrc: collectConnectSrc([
+              ...(options.specs ?? []).map((s) => s.url),
+              ...(options.openApiDocument?.servers ?? []).map((s) => s.url),
+              ...readServerUrls(llmsDocumentSource),
+              ...(options.additionalProxyOrigins ?? []),
+              ...(options.cspConnectSrc ?? []),
+            ]),
+          });
 
     if (isFastify) {
       const fastifyStatic = loadFastifyStatic();
       const instance = httpAdapter.getInstance() as FastifyRootInstance;
       instance.register(
         (scoped, _opts, done) => {
+          if (securityHeaders.length > 0) {
+            scoped.addHook('onRequest', (_req, reply, done) => {
+              for (const [name, value] of securityHeaders) reply.header(name, value);
+              done();
+            });
+          }
           scoped.register(fastifyStatic, {
             root: uiDir,
             // `wildcard: false` is required by @fastify/static for a scoped
@@ -307,7 +392,18 @@ export class DocfyUiModule {
     // `index: false` so directory requests (e.g. `GET /docs/`) fall through
     // to the catch-all below instead of express.static serving the
     // un-patched index.html straight off disk.
-    app.use(mountPath, express.static(uiDir, { index: false }));
+    const expressLib = requireOptionalPeer<typeof import('express')>(
+      'express',
+      'DocfyUiModule.setup() on an Express app',
+      false,
+    );
+    if (securityHeaders.length > 0) {
+      app.use(mountPath, (_req: express.Request, res: express.Response, next: () => void) => {
+        for (const [name, value] of securityHeaders) res.setHeader(name, value);
+        next();
+      });
+    }
+    app.use(mountPath, expressLib.static(uiDir, { index: false }));
     app.use(mountPath, (_req: express.Request, res: express.Response) => {
       res.type('text/html');
       res.send(indexHtml);

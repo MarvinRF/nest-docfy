@@ -15,7 +15,7 @@ const mockNormalizeDocument = normalizeDocument as jest.MockedFunction<typeof no
 const mockBuildLlmsTxt = buildLlmsTxt as jest.MockedFunction<typeof buildLlmsTxt>;
 const mockBuildLlmsFullTxt = buildLlmsFullTxt as jest.MockedFunction<typeof buildLlmsFullTxt>;
 
-type ScopedCall = { method: 'register' | 'setNotFoundHandler'; args: unknown[] };
+type ScopedCall = { method: 'register' | 'setNotFoundHandler' | 'addHook'; args: unknown[] };
 type ScopedRegistration = { opts: { prefix: string }; scopedCalls: ScopedCall[] };
 
 function makeRecordingApp(type: 'express' | 'fastify' = 'express') {
@@ -28,6 +28,7 @@ function makeRecordingApp(type: 'express' | 'fastify' = 'express') {
       const scoped = {
         register: (...a: unknown[]) => scopedCalls.push({ method: 'register', args: a }),
         setNotFoundHandler: (...a: unknown[]) => scopedCalls.push({ method: 'setNotFoundHandler', args: a }),
+        addHook: (...a: unknown[]) => scopedCalls.push({ method: 'addHook', args: a }),
       };
       plugin(scoped, opts, () => {});
       scopedRegistrations.push({ opts, scopedCalls });
@@ -84,6 +85,23 @@ function makeMockResponse() {
 
 const PATCHED_INDEX_HTML = fs.readFileSync(require.resolve('docfy-ui/dist/index.html'), 'utf8');
 
+/** Parses the `<script type="application/json" id="docfy-config">` block from served HTML. */
+function readHostConfig(html: string | undefined): Record<string, unknown> {
+  const match = /<script type="application\/json" id="docfy-config">(.*?)<\/script>/s.exec(html ?? '');
+  if (!match) throw new Error('no docfy-config block in served HTML');
+  return JSON.parse(match[1]) as Record<string, unknown>;
+}
+
+function fallbackBody(calls: ReturnType<typeof makeRecordingApp>['calls'], mountPath = '/docs'): string {
+  const fallback = calls.filter((c) => c.args[0] === mountPath).at(-1)!;
+  const handler = fallback.args[1] as (req: unknown, res: ReturnType<typeof makeMockResponse>) => void;
+  const res = makeMockResponse();
+  handler(undefined, res);
+  return res.body ?? '';
+}
+
+const JSON_HEADERS = { 'content-type': 'application/json' };
+
 describe('DocfyUiModule.setup() — Express', () => {
   it('registers static-asset middleware and an index.html fallback at mountPath', () => {
     const { app, calls } = makeRecordingApp();
@@ -104,14 +122,13 @@ describe('DocfyUiModule.setup() — Express', () => {
     handler(undefined, res);
 
     expect(res.headers['Content-Type']).toBe('text/html');
-    expect(res.body).toContain('<base href="/docs/" />');
-    expect(res.body).toContain('window.__DOCFY_BASE_PATH__ = "/docs/"');
     expect(res.body).toBe(
       PATCHED_INDEX_HTML.replace(
         '<head>',
-        `<head>\n    <base href="/docs/" />\n    <script>window.__DOCFY_BASE_PATH__ = "/docs/";</script>`,
+        `<head>\n    <base href="/docs/" />\n    <script type="application/json" id="docfy-config">{"basePath":"/docs/"}</script>`,
       ),
     );
+    expect(res.body).not.toMatch(/<script>/);
   });
 
   it('does not register a /api-json handler when staticSpecPath is omitted', () => {
@@ -188,7 +205,7 @@ describe('DocfyUiModule.setup() — Express', () => {
     const res = makeMockResponse();
     handler(undefined, res);
 
-    expect(res.body).toContain(`window.__DOCFY_SPECS__ = ${JSON.stringify(specs)};`);
+    expect(readHostConfig(res.body).specs).toEqual(specs);
   });
 
   it('does not register a proxy route or inject window.__DOCFY_PROXY_PATH__ when neither proxy option is given', () => {
@@ -215,7 +232,7 @@ describe('DocfyUiModule.setup() — Express', () => {
     const handler = fallback.args[1] as (req: unknown, res: ReturnType<typeof makeMockResponse>) => void;
     const res = makeMockResponse();
     handler(undefined, res);
-    expect(res.body).toContain('window.__DOCFY_PROXY_PATH__ = "/docs/__docfy_proxy";');
+    expect(readHostConfig(res.body).proxyPath).toBe('/docs/__docfy_proxy');
   });
 
   it('also registers the proxy route when only additionalProxyOrigins is given (no openApiDocument)', () => {
@@ -232,10 +249,160 @@ describe('DocfyUiModule.setup() — Express', () => {
     const proxyCall = calls.find((c) => c.args[0] === '/docs/__docfy_proxy')!;
     const handler = proxyCall.args[1] as (req: unknown, res: ReturnType<typeof makeMockResponse>) => unknown;
     const res = makeMockResponse();
-    await handler({ body: { method: 'GET', url: 'https://internal.local/admin' } }, res);
+    await handler({ headers: JSON_HEADERS, body: { method: 'GET', url: 'https://internal.local/admin' } }, res);
 
     expect(res.statusCode).toBe(403);
     expect(res.headers['x-docfy-proxy-error']).toBe('origin_not_allowed');
+  });
+
+  describe('proxy access control', () => {
+    function proxyHandler(calls: ReturnType<typeof makeRecordingApp>['calls']) {
+      const proxyCall = calls.find((c) => c.args[0] === '/docs/__docfy_proxy');
+      return proxyCall?.args[1] as ((req: unknown, res: ReturnType<typeof makeMockResponse>) => unknown) | undefined;
+    }
+    const servers = { openApiDocument: { servers: [{ url: 'https://api.example.com' }] } };
+
+    it('rejects a non-JSON content type with 415 (blocks cross-site form posts)', async () => {
+      const { app, calls } = makeRecordingApp();
+      DocfyUiModule.setup('/docs', app, servers);
+      const res = makeMockResponse();
+      await proxyHandler(calls)!({ headers: { 'content-type': 'text/plain' }, body: '{}' }, res);
+      expect(res.statusCode).toBe(415);
+      expect(res.headers['x-docfy-proxy-error']).toBe('unsupported_media_type');
+    });
+
+    it('rejects with 403 when proxyAuthorize returns false', async () => {
+      const { app, calls } = makeRecordingApp();
+      const proxyAuthorize = jest.fn().mockResolvedValue(false);
+      DocfyUiModule.setup('/docs', app, { ...servers, proxyAuthorize });
+      const res = makeMockResponse();
+      const req = { headers: JSON_HEADERS, body: { method: 'GET', url: 'https://api.example.com/x' } };
+      await proxyHandler(calls)!(req, res);
+      expect(proxyAuthorize).toHaveBeenCalledWith(req);
+      expect(res.statusCode).toBe(403);
+      expect(res.headers['x-docfy-proxy-error']).toBe('proxy_unauthorized');
+    });
+
+    it('fails closed with 403 when proxyAuthorize throws', async () => {
+      const error = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+      const { app, calls } = makeRecordingApp();
+      DocfyUiModule.setup('/docs', app, {
+        ...servers,
+        proxyAuthorize: () => {
+          throw new Error('session store down');
+        },
+      });
+      const res = makeMockResponse();
+      await proxyHandler(calls)!({ headers: JSON_HEADERS, body: {} }, res);
+      expect(res.statusCode).toBe(403);
+      error.mockRestore();
+    });
+
+    describe('with NODE_ENV=production', () => {
+      const originalEnv = process.env.NODE_ENV;
+      let error: jest.SpyInstance;
+      beforeEach(() => {
+        process.env.NODE_ENV = 'production';
+        error = jest.spyOn(console, 'error').mockImplementation(() => undefined);
+      });
+      afterEach(() => {
+        process.env.NODE_ENV = originalEnv;
+        error.mockRestore();
+      });
+
+      it('does not register the proxy without proxyAuthorize, and says why', () => {
+        const { app, calls } = makeRecordingApp();
+        DocfyUiModule.setup('/docs', app, servers);
+        expect(proxyHandler(calls)).toBeUndefined();
+        expect(readHostConfig(fallbackBody(calls)).proxyPath).toBeUndefined();
+        expect(error).toHaveBeenCalledWith(expect.stringContaining('"Try it out" proxy is DISABLED'));
+      });
+
+      it('registers the proxy when proxyAuthorize is given', () => {
+        const { app, calls } = makeRecordingApp();
+        DocfyUiModule.setup('/docs', app, { ...servers, proxyAuthorize: () => true });
+        expect(proxyHandler(calls)).toBeDefined();
+      });
+
+      it('registers the proxy when allowProxyInProduction is set', () => {
+        const { app, calls } = makeRecordingApp();
+        DocfyUiModule.setup('/docs', app, { ...servers, allowProxyInProduction: true });
+        expect(proxyHandler(calls)).toBeDefined();
+      });
+
+      it('never sends security notices to the browser', () => {
+        const { app, calls } = makeRecordingApp();
+        DocfyUiModule.setup('/docs', app, { ...servers, allowProxyInProduction: true, securityHeaders: false });
+        expect(readHostConfig(fallbackBody(calls)).securityNotices).toBeUndefined();
+      });
+    });
+
+    it('outside production, sends a notice when the proxy has no proxyAuthorize', () => {
+      const { app, calls } = makeRecordingApp();
+      DocfyUiModule.setup('/docs', app, servers);
+      const notices = readHostConfig(fallbackBody(calls)).securityNotices as string[];
+      expect(notices).toEqual([expect.stringContaining('has no proxyAuthorize hook')]);
+    });
+
+    it('sends no notice when proxyAuthorize is given', () => {
+      const { app, calls } = makeRecordingApp();
+      DocfyUiModule.setup('/docs', app, { ...servers, proxyAuthorize: () => true });
+      expect(readHostConfig(fallbackBody(calls)).securityNotices).toBeUndefined();
+    });
+  });
+
+  describe('security headers', () => {
+    function headersMiddleware(calls: ReturnType<typeof makeRecordingApp>['calls']) {
+      const first = calls.find((c) => c.args[0] === '/docs');
+      const res = makeMockResponse();
+      const next = jest.fn();
+      (first!.args[1] as (req: unknown, res: unknown, next: () => void) => void)(undefined, res, next);
+      return { headers: res.headers, next };
+    }
+
+    it('sends a strict CSP and hardening headers before the static middleware', () => {
+      const { app, calls } = makeRecordingApp();
+      DocfyUiModule.setup('/docs', app, {
+        specs: [{ name: 'orders', url: 'https://orders.internal/api-json' }],
+        cspConnectSrc: ['https://api.example.com'],
+      });
+      const { headers, next } = headersMiddleware(calls);
+      expect(next).toHaveBeenCalled();
+      expect(headers['Content-Security-Policy']).toContain("script-src 'self'");
+      expect(headers['Content-Security-Policy']).toContain(
+        "connect-src 'self' https://orders.internal https://api.example.com",
+      );
+      expect(headers['Content-Security-Policy']).toContain("frame-ancestors 'self'");
+      expect(headers['X-Content-Type-Options']).toBe('nosniff');
+      expect(headers['Referrer-Policy']).toBe('no-referrer');
+    });
+
+    it('uses contentSecurityPolicy verbatim when given', () => {
+      const { app, calls } = makeRecordingApp();
+      DocfyUiModule.setup('/docs', app, { contentSecurityPolicy: "default-src 'none'" });
+      expect(headersMiddleware(calls).headers['Content-Security-Policy']).toBe("default-src 'none'");
+    });
+
+    it('registers no headers middleware with securityHeaders: false, and warns in dev', () => {
+      const { app, calls } = makeRecordingApp();
+      DocfyUiModule.setup('/docs', app, { securityHeaders: false });
+      expect(calls.filter((c) => c.args[0] === '/docs')).toHaveLength(2);
+      expect(readHostConfig(fallbackBody(calls)).securityNotices).toEqual([
+        expect.stringContaining('Security headers are disabled'),
+      ]);
+    });
+
+    it('on Fastify, sets the same headers from a scoped onRequest hook', () => {
+      const { app, scopedRegistrations } = makeRecordingApp('fastify');
+      DocfyUiModule.setup('/docs', app);
+      const hook = scopedRegistrations[0].scopedCalls.find((c) => c.method === 'addHook')!;
+      expect(hook.args[0]).toBe('onRequest');
+      const reply = makeMockResponse();
+      const done = jest.fn();
+      (hook.args[1] as (req: unknown, reply: unknown, done: () => void) => void)(undefined, reply, done);
+      expect(reply.headers['Content-Security-Policy']).toContain("script-src 'self'");
+      expect(done).toHaveBeenCalled();
+    });
   });
 
   describe('injected HTML hardening', () => {
@@ -267,30 +434,6 @@ describe('DocfyUiModule.setup() — Express', () => {
     });
   });
 
-  describe('production proxy warning', () => {
-    const originalEnv = process.env.NODE_ENV;
-    let warn: jest.SpyInstance;
-    beforeEach(() => {
-      warn = jest.spyOn(console, 'warn').mockImplementation(() => undefined);
-    });
-    afterEach(() => {
-      process.env.NODE_ENV = originalEnv;
-      warn.mockRestore();
-    });
-
-    it('warns when the proxy is enabled with NODE_ENV=production', () => {
-      process.env.NODE_ENV = 'production';
-      DocfyUiModule.setup('/docs', makeRecordingApp().app, { additionalProxyOrigins: ['https://api.example.com'] });
-      expect(warn).toHaveBeenCalledWith(expect.stringContaining('"Try it out" proxy is enabled in production'));
-    });
-
-    it('does not warn outside production', () => {
-      process.env.NODE_ENV = 'development';
-      DocfyUiModule.setup('/docs', makeRecordingApp().app, { additionalProxyOrigins: ['https://api.example.com'] });
-      expect(warn).not.toHaveBeenCalled();
-    });
-  });
-
   describe('guides option', () => {
     function getFallbackBody(
       app: ReturnType<typeof makeRecordingApp>['app'],
@@ -314,7 +457,7 @@ describe('DocfyUiModule.setup() — Express', () => {
       const guides = [{ slug: 'getting-started', title: 'Getting Started', content: '# Hi' }];
       DocfyUiModule.setup('/docs', app, { guides });
 
-      expect(getFallbackBody(app, calls)).toContain(`window.__DOCFY_GUIDES__ = ${JSON.stringify(guides)};`);
+      expect(readHostConfig(getFallbackBody(app, calls)).guides).toEqual(guides);
     });
 
     it('escapes a literal </script> in guide content so it cannot break out of the injected <script> tag', () => {
@@ -457,7 +600,7 @@ describe('DocfyUiModule.setup() — Fastify', () => {
 
     expect(reply.headers['Content-Type']).toBe('text/html');
     expect(reply.body).toContain('<base href="/docs/" />');
-    expect(reply.body).toContain('window.__DOCFY_BASE_PATH__ = "/docs/"');
+    expect(readHostConfig(reply.body).basePath).toBe('/docs/');
   });
 
   it('still registers /api-json via httpAdapter.get(), unaffected by the Fastify branch', () => {

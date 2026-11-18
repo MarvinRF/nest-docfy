@@ -38,6 +38,7 @@ export const BODY_TOO_LARGE = Symbol('docfy-proxy-body-too-large');
 
 interface RawRequestLike {
   body?: unknown;
+  headers?: Record<string, string | string[] | undefined>;
   on(event: 'data' | 'end' | 'error', listener: (arg?: unknown) => void): unknown;
 }
 
@@ -113,7 +114,7 @@ export function buildAllowedOrigins(
   return origins;
 }
 
-function sendProxyError(res: ProxyResponderLike, status: number, error: string, message: string): void {
+export function sendProxyError(res: ProxyResponderLike, status: number, error: string, message: string): void {
   res
     .status(status)
     .header(PROXY_ERROR_HEADER, error)
@@ -250,4 +251,39 @@ export async function handleProxyRequest(
     const isTimeout = message.includes('timed out');
     sendProxyError(res, isTimeout ? 504 : 502, isTimeout ? 'timeout' : 'network_error', message);
   }
+}
+
+/**
+ * Full proxy route: content-type check, then authorization, then the envelope read and forward.
+ * Requiring `application/json` blocks cross-site `<form>` posts (which can only send
+ * `text/plain`, `multipart/form-data` or `application/x-www-form-urlencoded` without a CORS
+ * preflight) from using a logged-in visitor's session to reach the proxy. docfy-ui always sends
+ * JSON. `authorize` runs before the body is read, and any error it throws rejects the request.
+ */
+export async function handleProxyRoute(
+  req: RawRequestLike,
+  res: ProxyResponderLike,
+  allowedOrigins: Set<string>,
+  authorize?: (req: unknown) => boolean | Promise<boolean>,
+): Promise<void> {
+  const contentType = String(req.headers?.['content-type'] ?? '');
+  if (!/^application\/json\b/i.test(contentType)) {
+    sendProxyError(res, 415, 'unsupported_media_type', 'The proxy only accepts Content-Type: application/json.');
+    return;
+  }
+
+  if (authorize) {
+    let allowed = false;
+    try {
+      allowed = await authorize(req);
+    } catch (err) {
+      console.error('DocfyUiModule: proxyAuthorize threw; rejecting the request:', err);
+    }
+    if (!allowed) {
+      sendProxyError(res, 403, 'proxy_unauthorized', 'Not authorized to use the Try it out proxy.');
+      return;
+    }
+  }
+
+  await handleProxyRequest(await readJsonBody(req), allowedOrigins, res);
 }

@@ -32,7 +32,19 @@ describe('DocfyUiModule.setup() on a real Fastify app', () => {
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toContain('text/html');
     expect(res.payload).toContain('<base href="/docs/" />');
-    expect(res.payload).toContain('window.__DOCFY_BASE_PATH__ = "/docs/"');
+    expect(res.payload).toContain('<script type="application/json" id="docfy-config">{"basePath":"/docs/"');
+  });
+
+  it('sends the CSP and hardening headers on the UI and its static assets', async () => {
+    const html = await app.inject({ method: 'GET', url: '/docs' });
+    expect(html.headers['content-security-policy']).toContain("script-src 'self'");
+    expect(html.headers['x-content-type-options']).toBe('nosniff');
+
+    const uiDir = path.dirname(require.resolve('docfy-ui/dist/index.html'));
+    const assetName = fs.readdirSync(path.join(uiDir, 'assets')).find((f) => f.endsWith('.js'))!;
+    const asset = await app.inject({ method: 'GET', url: `/docs/assets/${assetName}` });
+    expect(asset.statusCode).toBe(200);
+    expect(asset.headers['x-content-type-options']).toBe('nosniff');
   });
 
   it('falls back to the patched index.html for a deep client-side route on hard reload', async () => {
@@ -40,7 +52,7 @@ describe('DocfyUiModule.setup() on a real Fastify app', () => {
 
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toContain('text/html');
-    expect(res.payload).toContain('window.__DOCFY_BASE_PATH__ = "/docs/"');
+    expect(res.payload).toContain('<script type="application/json" id="docfy-config">{"basePath":"/docs/"');
   });
 
   it('serves a real static asset file with 200 and byte-identical content', async () => {
@@ -90,7 +102,7 @@ describe('DocfyUiModule.setup() "Try it out" proxy on a real Fastify app', () =>
 
   it('injects window.__DOCFY_PROXY_PATH__ into the served index.html', async () => {
     const res = await app.inject({ method: 'GET', url: '/docs' });
-    expect(res.payload).toContain('window.__DOCFY_PROXY_PATH__ = "/docs/__docfy_proxy";');
+    expect(res.payload).toContain('"proxyPath":"/docs/__docfy_proxy"');
   });
 
   it('forwards an allowed request end-to-end and passes through the real response', async () => {
