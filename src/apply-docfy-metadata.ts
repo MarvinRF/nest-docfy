@@ -2,7 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { mergeSpecPatch, OpenApiDocument } from './cli/merge-spec-patch';
 import type { SpecPatch } from './cli/build-openapi-patch';
-import { DOCFY_METADATA_FILENAME } from './plugin/generate-metadata';
+import { DOCFY_METADATA_FILENAME } from './plugin/metadata-filename';
 
 export interface ApplyDocfyMetadataOptions {
   /** Absolute path to the metadata file. Defaults to `docfy-metadata.json` next to the running entry file. */

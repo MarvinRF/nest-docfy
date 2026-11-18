@@ -3,9 +3,9 @@ import path from 'path';
 import { scanApp } from '../cli/scan-controllers';
 import { computeSpecPatch } from '../cli/patch-spec';
 import type { ProjectApp } from '../cli/project-types';
+import { DOCFY_METADATA_FILENAME } from './metadata-filename';
 
-/** Filename the CLI plugin writes into the build output dir, and `applyDocfyMetadata()` reads by default. */
-export const DOCFY_METADATA_FILENAME = 'docfy-metadata.json';
+export { DOCFY_METADATA_FILENAME };
 
 export interface GenerateMetadataOptions {
   /** Absolute path to the project's tsconfig — the same one the build is using. */
