@@ -14,7 +14,7 @@ Keep your NestJS controllers clean. Swagger documentation lives in a dedicated c
 📖 **[Full documentation](https://www.nestdocfy.com/)**
 
 > [!IMPORTANT]
-> **0.19 is a security release with breaking changes.** Build tooling is no longer installed into production, the "Try it out" proxy stays off in production until you authorize who can use it, and the docs UI ships a strict Content-Security-Policy. Upgrading takes a few minutes: see [Migrating to 0.19](#migrating-to-019) and [Security](#security).
+> **0.19 is a security release with breaking changes.** Build tooling is no longer installed into production, the "Try it out" proxy stays off in production until you authorize who can use it, and the docs UI ships a strict Content-Security-Policy. Upgrading takes a few minutes: see [Migrating to 0.19](#migrating-to-019) and [Security](#security). Using a coding agent? Point it at [`MIGRATION.md`](./MIGRATION.md) (also shipped in the package, at `node_modules/nestjs-docfy/MIGRATION.md`): every step starts with a check it can run against your project.
 
 ## Table of contents
 

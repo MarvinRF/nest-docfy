@@ -32,6 +32,9 @@ CLI and compiler plugin (build time only, since 0.19 optional peers): `npm insta
 
 ## Security defaults (0.19+)
 
+Upgrading from <0.19: follow `MIGRATION.md` (shipped in the package: `node_modules/nestjs-docfy/MIGRATION.md`), https://www.nestdocfy.com/docs/getting-started/security. Advisory: GHSA-v7f7-7xm3-5jr9.
+
+
 - `DocfyUiModule.setup()`: the "Try it out" proxy is disabled when `NODE_ENV=production` unless `proxyAuthorize: (req) => boolean | Promise<boolean>` is set (or `allowProxyInProduction: true`). Nest guards never run for the docs/proxy routes; protect the mount path with middleware.
 - The proxy only accepts `Content-Type: application/json`, never relays `Host` or `Set-Cookie`, and only targets the spec's `servers[]` plus `additionalProxyOrigins`.
 - The docs UI is served with a strict CSP (`script-src 'self'`) plus `nosniff`, `Referrer-Policy: no-referrer` and same-origin framing. Options: `securityHeaders: false`, `contentSecurityPolicy`, `cspConnectSrc`.
