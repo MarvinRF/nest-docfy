@@ -1,3 +1,10 @@
+## [0.19.1](https://github.com/MarvinRF/nest-docfy/compare/v0.19.0...v0.19.1) (2026-11-19)
+
+
+### Bug Fixes
+
+* **package:** ship an agent-readable MIGRATION.md and llms.txt in the tarball ([6ea2904](https://github.com/MarvinRF/nest-docfy/commit/6ea2904965efe74f427f05a5cd391c280fbd425f))
+
 # [0.19.0](https://github.com/MarvinRF/nest-docfy/compare/v0.18.2...v0.19.0) (2026-11-18)
 
 
